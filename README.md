@@ -60,6 +60,28 @@ CLI), data counts and timestamp range. `latest-small` is a development dataset
 that GroupLens may update; its license restricts commercial use without prior
 permission. Raw and processed dataset files are excluded from Git.
 
+## Train the content model
+
+After preparing the dataset, fit and save the TF-IDF model:
+
+```bash
+python -m recommender.models.content
+```
+
+This reads `data/processed/movies_with_tags.csv` and writes
+`artifacts/content_recommender.joblib`. To query it from Python:
+
+```python
+from recommender.models.content import ContentRecommender
+
+model = ContentRecommender.load("artifacts/content_recommender.joblib")
+results = model.similar_movies(movie_id=1, top_k=10, exclude_movie_ids={2, 3})
+```
+
+The model combines title, genres and aggregated tags. Results are ordered by
+cosine similarity with movie ID as a deterministic tie-breaker; the seed and
+excluded watched movies are omitted.
+
 ## Quality checks
 
 ```bash

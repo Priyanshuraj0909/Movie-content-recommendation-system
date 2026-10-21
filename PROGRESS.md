@@ -1,11 +1,11 @@
 # Project Progress
-Current phase: Phase 2 — COMPLETE
+Current phase: Phase 3 — COMPLETE
 
 | Phase | Status | Evidence |
 |---|---|---|
 | 1 Foundation | Complete | Python 3.12.7 ARM64; `python -m pytest -q` (2 passed); `python -m ruff check .` (passed); `python -m recommender` (passed). |
 | 2 Data | Complete | Python 3.12 ARM64; `python -m pytest -q` (8 passed); `python -m ruff check .` (passed); official archive checksum verified. |
-| 3 Content model | Not started | |
+| 3 Content model | Complete | Python 3.12 ARM64; `python -m pytest -q` (14 passed); `python -m ruff check .` (passed); trained and loaded artifact on all 9,742 movies. |
 | 4 Collaborative | Not started | |
 | 5 Hybrid & evaluation | Not started | |
 | 6 API & database | Not started | |
@@ -29,3 +29,9 @@ None recorded.
 - Validated 9,742 movies, 100,836 ratings from 610 users, 3,683 tag applications and 9,742 links.
 - Chronological per-user split: 81,200 train, 9,818 validation and 9,818 test ratings; every user retains at least one training interaction.
 - Raw CSVs, processed files and the generated manifest remain local and ignored by Git.
+
+## Phase 3 Notes
+- Added a sparse TF-IDF content model using movie titles, genres and aggregated tags.
+- Similarity ranking is deterministic, excludes the seed and caller-provided watched IDs, and handles unknown IDs.
+- Saved and loaded `artifacts/content_recommender.joblib`; the generated artifact remains ignored by Git.
+- The model uses MovieLens metadata and tags; it does not have plot descriptions.
