@@ -8,7 +8,6 @@
       "root": ".",
       "framework": "fastapi",
       "entrypoint": "vercel_entry.py",
-      "installCommand": "python -m pip install -r requirements.txt && python -m pip install --no-deps .",
       "buildCommand": "bash scripts/setup_demo.sh --skip-evaluation",
       "functions": {
         "vercel_entry.py": {
