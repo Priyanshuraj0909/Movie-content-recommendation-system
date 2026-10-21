@@ -37,6 +37,29 @@ python -m recommender
 The command prints the configured local data and artifact paths. It does not
 download data or create model files.
 
+## Download and prepare MovieLens
+
+```bash
+python -m recommender.data.movielens download
+python -m recommender.data.movielens prepare
+```
+
+The downloader uses the official [GroupLens MovieLens latest-small archive](https://files.grouplens.org/datasets/movielens/ml-latest-small.zip)
+and verifies its companion [MD5 checksum](https://files.grouplens.org/datasets/movielens/ml-latest-small.zip.md5)
+before writing the CSV files to `data/raw/`. It refuses to overwrite existing
+CSV files. Preparation validates the schemas, IDs, required values, rating
+scale, timestamps and movie references, then writes `movies_with_tags.csv`,
+`links.csv`, per-user chronological rating splits, and `dataset_manifest.json`
+to `data/processed/`. A small `download_metadata.json` sidecar records the
+verified archive checksum so the processed manifest can preserve provenance.
+
+The validation and test rows are the newest interactions per user; timestamp
+ties are ordered by `movieId`. Users with fewer than three ratings stay entirely
+in training. The manifest records source, checksum (when downloaded through the
+CLI), data counts and timestamp range. `latest-small` is a development dataset
+that GroupLens may update; its license restricts commercial use without prior
+permission. Raw and processed dataset files are excluded from Git.
+
 ## Quality checks
 
 ```bash
