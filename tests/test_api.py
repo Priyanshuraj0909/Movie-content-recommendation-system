@@ -61,6 +61,21 @@ def test_health_and_movie_search(client: TestClient) -> None:
     assert client.get("/api/movies/search", params={"q": "no match"}).json() == []
 
 
+def test_external_ratings_batch_route_returns_empty_sources_without_credentials(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("TMDB_API_READ_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("OMDB_API_KEY", raising=False)
+    response = client.get("/api/movies/external-ratings", params={"movie_ids": [1, 2]})
+    assert response.status_code == 200
+    assert [item["movie_id"] for item in response.json()] == [1, 2]
+    assert response.json()[0]["tmdb"]["rating"] is None
+    assert response.json()[0]["imdb"]["rating"] is None
+    assert client.get(
+        "/api/movies/external-ratings", params={"movie_ids": [999]}
+    ).status_code == 404
+
+
 def test_similar_recommendations_and_unknown_movie(client: TestClient) -> None:
     response = client.get("/api/recommendations/similar/1", params={"limit": 5})
     assert response.status_code == 200

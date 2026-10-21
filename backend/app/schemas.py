@@ -19,6 +19,21 @@ class RecommendationResponse(MovieResponse):
     predicted_rating: float | None = None
 
 
+class PublicRatingSource(BaseModel):
+    rating: float | None = None
+    vote_count: int | None = None
+    tmdb_id: str | None = None
+    imdb_id: str | None = None
+    url: str | None = None
+
+
+class ExternalMovieRatings(BaseModel):
+    movie_id: int
+    title: str
+    tmdb: PublicRatingSource
+    imdb: PublicRatingSource
+
+
 class RatingCreate(BaseModel):
     user_id: int = Field(gt=0)
     movie_id: int = Field(gt=0)

@@ -78,3 +78,11 @@ None recorded.
 - Benchmark run on macOS 27.0.1 ARM64 with Python 3.12.7: content and collaborative artifact loads 0.046s and 0.030s; warm title search p95 1.219ms; similar movie p95 0.867ms; 1,000 predictions p95 0.273ms; full-catalog top-10 ranking p95 2.876ms. Measurements exclude network and concurrency; see `docs/PERFORMANCE.md`.
 - Verification: `.venv/bin/python -m pytest -q` (34 passed), `.venv/bin/python -m ruff check .` (passed), shell syntax and demo setup passed. A temporary fresh-clone copy without `data/` or `artifacts/` also passed all 34 tests after the CI editable install.
 - Docker build was not run because this machine has no Docker, Podman or nerdctl CLI. Docker support is optional; source and compose files are included but need a Docker host to verify.
+
+## Read-only IMDb/TMDB ratings feature
+- Added a batched read-only ratings endpoint and an external provider service with bounded HTTP timeouts, per-source failure handling, ID/title/year identity checks, vote parsing and a bounded 12-hour process-local cache.
+- MovieLens `links.csv` TMDB/IMDb IDs are joined during startup; Vercel's API bundle now includes that file. No database tables or recommendation algorithms changed.
+- Added responsive source badges to web movie cards and a details-dialog ratings section with vote counts and official links. Added TMDB logo attribution and its non-endorsement notice.
+- Added optional server-only environment variable names to `.env.example`, README setup/deployment instructions, and mocked tests for both/one/missing providers, `N/A`, timeouts, invalid credentials, caching, ID matching and title/year fallback verification.
+- Verification: `.venv/bin/python -m pytest -q` (51 passed); `.venv/bin/python -m ruff check .`, `node --check frontend/web/app.js`, Vercel JSON parsing and `git diff --check` passed.
+- Live provider responses and hosted deployment remain unverified because no TMDB/OMDb keys have been configured. The changes are local only and have not been pushed.

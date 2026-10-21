@@ -10,6 +10,7 @@ let activeGenre = "";
 let searchTimer;
 let toastTimer;
 let activeMovie = null;
+const externalRatings = new Map();
 
 function readProfileId() {
   const stored = Number.parseInt(localStorage.getItem(PROFILE_KEY), 10);
@@ -204,6 +205,7 @@ function makeRatingControls(movie) {
 function makeMovieCard(movie) {
   const card = document.createElement("article");
   card.className = "movie-card";
+  card.dataset.movieId = String(movie.movie_id);
   const posterWrap = document.createElement("div");
   posterWrap.className = "poster-wrap";
   const poster = makePoster(movie);
@@ -234,6 +236,9 @@ function makeMovieCard(movie) {
   const genres = document.createElement("p");
   genres.className = "movie-meta";
   genres.textContent = getGenres(movie).slice(0, 3).join(" · ") || "Genre not listed";
+  const ratingLine = document.createElement("div");
+  ratingLine.className = "movie-public-ratings";
+  ratingLine.setAttribute("aria-label", "IMDb and TMDB community ratings");
   const bottom = document.createElement("div");
   bottom.className = "movie-card-bottom";
   if (Number.isFinite(movie.score)) {
@@ -248,7 +253,7 @@ function makeMovieCard(movie) {
   detail.textContent = "Details";
   detail.addEventListener("click", () => openMovie(movie));
   bottom.append(detail);
-  info.append(title, genres, bottom, makeRatingControls(movie));
+  info.append(title, genres, ratingLine, bottom, makeRatingControls(movie));
   card.append(posterWrap, info);
   return card;
 }
@@ -260,6 +265,87 @@ function renderMovies(container, movies, emptyTitle, emptyMessage) {
     return;
   }
   movies.forEach((movie) => container.append(makeMovieCard(movie)));
+  loadCardRatings(container, movies);
+}
+
+function formatVotes(value) {
+  return Number.isFinite(Number(value)) ? Number(value).toLocaleString() + " votes" : "";
+}
+
+function ratingLabel(source, rating) {
+  if (!rating || rating.rating === null || rating.rating === undefined || !Number.isFinite(Number(rating.rating))) return "";
+  const score = Number(rating.rating).toFixed(1);
+  const votes = formatVotes(rating.vote_count);
+  return "★ " + source + " " + score + "/10" + (votes ? " · " + votes : "");
+}
+
+function renderCardRating(container, movieId, data) {
+  $$('[data-movie-id="' + Number(movieId) + '"] .movie-public-ratings', container).forEach((line) => {
+    line.replaceChildren();
+    [["IMDb", data.imdb], ["TMDB", data.tmdb]].forEach(([source, rating]) => {
+      const label = ratingLabel(source, rating);
+      if (!label) return;
+      const badge = document.createElement("span");
+      badge.className = "public-rating-badge";
+      badge.textContent = label;
+      line.append(badge);
+    });
+    line.hidden = !line.childElementCount;
+  });
+}
+
+async function loadCardRatings(container, movies) {
+  const ids = [...new Set(movies.map((movie) => Number(movie.movie_id)).filter(Number.isSafeInteger))];
+  const missing = ids.filter((id) => !externalRatings.has(id));
+  if (missing.length) {
+    try {
+      const params = new URLSearchParams();
+      missing.forEach((id) => params.append("movie_ids", String(id)));
+      const values = await request("/movies/external-ratings?" + params.toString());
+      values.forEach((value) => externalRatings.set(Number(value.movie_id), value));
+    } catch {
+      return;
+    }
+  }
+  ids.forEach((id) => {
+    const value = externalRatings.get(id);
+    if (value) renderCardRating(container, id, value);
+  });
+}
+
+function renderDialogRatings(data) {
+  const grid = $("#dialog-ratings");
+  const state = $("#dialog-ratings-state");
+  grid.replaceChildren();
+  [["IMDb", data.imdb], ["TMDB", data.tmdb]].forEach(([source, rating]) => {
+    const hasScore = rating && rating.rating !== null && rating.rating !== undefined
+      && Number.isFinite(Number(rating.rating));
+    if (!rating || (!hasScore && !rating.url)) return;
+    const card = document.createElement("article");
+    card.className = "external-rating-card";
+    const brand = document.createElement("span");
+    brand.className = "external-rating-source";
+    brand.textContent = source + " community rating";
+    const score = document.createElement("strong");
+    score.className = "external-rating-score";
+    score.textContent = hasScore
+      ? "★ " + Number(rating.rating).toFixed(1) + " / 10"
+      : "No rating available";
+    const votes = document.createElement("span");
+    votes.className = "external-rating-votes";
+    votes.textContent = formatVotes(rating.vote_count) || "Vote count unavailable";
+    card.append(brand, score, votes);
+    if (rating.url) {
+      const link = document.createElement("a");
+      link.href = rating.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "View on " + source + " ↗";
+      card.append(link);
+    }
+    grid.append(card);
+  });
+  state.textContent = grid.childElementCount ? "Ratings from the IMDb and TMDB communities." : "No external ratings are available for this title.";
 }
 
 function setConnection(status, message) {
@@ -401,7 +487,21 @@ async function openMovie(movie) {
   $("#dialog-similar-results").replaceChildren();
   $("#dialog-similar-results").innerHTML = '<div class="loading-state">Finding films with a similar feel…</div>';
   updateDialogWatchlistButton();
+  $("#dialog-ratings").replaceChildren();
+  $("#dialog-ratings-state").textContent = "Checking IMDb and TMDB…";
   dialog.showModal();
+  try {
+    let ratings = externalRatings.get(Number(movie.movie_id));
+    if (!ratings) {
+      const params = new URLSearchParams({ movie_ids: String(Number(movie.movie_id)) });
+      [ratings] = await request("/movies/external-ratings?" + params.toString());
+      if (ratings) externalRatings.set(Number(movie.movie_id), ratings);
+    }
+    if (ratings && activeMovie === movie) renderDialogRatings(ratings);
+    else if (activeMovie === movie) $("#dialog-ratings-state").textContent = "No external ratings are available for this title.";
+  } catch {
+    if (activeMovie === movie) $("#dialog-ratings-state").textContent = "Community ratings are unavailable right now.";
+  }
   try {
     const related = await request("/recommendations/similar/" + Number(movie.movie_id) + "?limit=5");
     renderMovies($("#dialog-similar-results"), related, "No similar titles found.", "Try another film from the collection.");

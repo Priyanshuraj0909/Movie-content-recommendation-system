@@ -25,6 +25,10 @@ The MovieLens catalog provides titles, genres, ratings, tags, and IDs. CineMatch
 uses original CSS artwork; it does not currently include licensed posters, plot
 summaries, cast lists, or trailers.
 
+Where credentials are configured, the web catalog also shows read-only public
+IMDb and TMDB community ratings. CineMatch does not collect public-site ratings
+or reviews from its visitors.
+
 ## Requirements
 
 - macOS on Apple Silicon or another supported platform
@@ -167,6 +171,9 @@ available routes are:
 - `GET /api/health` reports service status and the number of loaded movies.
 - `GET /api/movies/search?q=star&limit=20` searches titles without interpreting the
   query as a regular expression.
+- `GET /api/movies/external-ratings?movie_ids=1&movie_ids=2` returns available
+  public IMDb and TMDB ratings, each on its original 10-point scale, with vote
+  counts and official source links. Requests accept up to 30 MovieLens IDs.
 - `GET /api/recommendations/similar/{movie_id}?limit=10` returns content matches.
 - `GET /api/recommendations/users/{user_id}?limit=10` ranks unseen training-catalog
   movies from saved positive local ratings and the trained models. Users with
@@ -184,6 +191,30 @@ return 422.
 The API loads its prepared movie metadata and models during application startup.
 This keeps importing the application safe for tests and CI on a fresh clone;
 run the setup command above before starting the service.
+
+### IMDb and TMDB community ratings
+
+Ratings are fetched server-side from the official [TMDB API](https://developer.themoviedb.org/docs) and [OMDb API](https://www.omdbapi.com/).
+Set `TMDB_API_READ_ACCESS_TOKEN` and `OMDB_API_KEY` in the server environment
+to enable each provider. These variables are optional; with a missing key, an
+invalid response, timeout, or unavailable score, the affected rating is omitted
+and the rest of CineMatch continues to work. Do not put either key in browser
+JavaScript, a `NEXT_PUBLIC_` variable, or a committed `.env` file. `.env.example`
+contains variable names only. The API caches responses in memory for up to 12
+hours per warm process; this cache is not shared across Vercel instances.
+
+MovieLens `links.csv` IDs are joined to the catalog at backend startup and are
+included in the Vercel API bundle. TMDB lookups use the TMDB ID; OMDb lookups
+use the IMDb ID. Before returning data, the service checks the returned stable
+ID and title, plus the year when the catalog includes one. It never substitutes
+invented or locally submitted scores. The dark web app displays compact source
+badges on movie cards and rating details with vote counts and links in the
+movie-details dialog. Recommendation models and saved profile ratings are
+unchanged.
+
+TMDB attribution is shown in the web-app footer, including its required
+non-endorsement notice. TMDB/IMDb scores may differ because the services have
+their own voter populations and update schedules.
 
 ## Run the Streamlit interface
 
@@ -239,12 +270,16 @@ browser):
 
 - [Health](https://cinematch-king-09.vercel.app/api/health)
 - [Search for Matrix](https://cinematch-king-09.vercel.app/api/movies/search?q=matrix)
+- [Public ratings for a MovieLens ID](https://cinematch-king-09.vercel.app/api/movies/external-ratings?movie_ids=2571)
 - [Similar films for The Matrix](https://cinematch-king-09.vercel.app/api/recommendations/similar/2571?limit=5)
 - [Popular picks for profile 123456789](https://cinematch-king-09.vercel.app/api/recommendations/users/123456789?limit=10)
 
 To set up or redeploy this project on Vercel, connect the GitHub repository,
 configure `DATABASE_URL` as a Vercel environment secret for Preview and
-Production, then push to `main`. The database URL must never be committed.
+Production, and configure `TMDB_API_READ_ACCESS_TOKEN` and `OMDB_API_KEY` as
+server-only Vercel environment variables if public ratings are desired. These
+credentials must never be committed. Deploy the updated repository to publish
+the ratings feature.
 Vercel builds the API and frontend together. Hosted ratings use PostgreSQL;
 SQLite is for local development only because serverless filesystems are
 temporary.

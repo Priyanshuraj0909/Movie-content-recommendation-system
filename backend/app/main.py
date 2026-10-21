@@ -2,6 +2,7 @@
 
 import os
 from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import Annotated
 
@@ -14,12 +15,14 @@ from sqlalchemy.orm import Session
 from backend.app.database import get_session, make_session_factory, sqlite_url
 from backend.app.models import UserRating
 from backend.app.schemas import (
+    ExternalMovieRatings,
     HealthResponse,
     MovieResponse,
     RatingCreate,
     RatingResponse,
     RecommendationResponse,
 )
+from backend.app.services.external_ratings import get_movie_ratings
 from recommender.config import ARTIFACTS_DIR, PROCESSED_DATA_DIR
 from recommender.models.collaborative import CollaborativeRecommender
 from recommender.models.content import ContentRecommender
@@ -50,7 +53,23 @@ def _load_default_state() -> tuple[ContentRecommender, CollaborativeRecommender,
         ARTIFACTS_DIR / "collaborative_recommender.joblib"
     )
     movies = pd.read_csv(PROCESSED_DATA_DIR / "movies_with_tags.csv")
+    links_path = PROCESSED_DATA_DIR / "links.csv"
+    if links_path.is_file():
+        links = pd.read_csv(links_path, dtype={"imdbId": "string", "tmdbId": "string"})
+        movies = movies.merge(links, on="movieId", how="left", validate="one_to_one")
     return content, collaborative, movies
+
+
+def _movie_table(movies: pd.DataFrame) -> pd.DataFrame:
+    columns = ["movieId", "title", "genres"]
+    for optional in ("tmdbId", "imdbId"):
+        if optional in movies.columns:
+            columns.append(optional)
+    table = movies.loc[:, columns].copy()
+    table["movieId"] = pd.to_numeric(table["movieId"], errors="raise").astype(int)
+    table["title"] = table["title"].fillna("").astype(str)
+    table["genres"] = table["genres"].fillna("").astype(str)
+    return table.drop_duplicates("movieId").set_index("movieId", drop=False)
 
 
 def create_app(
@@ -63,11 +82,7 @@ def create_app(
     """Build an app, optionally injecting fitted models and a test database."""
     movie_table: pd.DataFrame | None = None
     if movies is not None:
-        movie_table = movies.loc[:, ["movieId", "title", "genres"]].copy()
-        movie_table["movieId"] = pd.to_numeric(movie_table["movieId"], errors="raise").astype(int)
-        movie_table["title"] = movie_table["title"].fillna("").astype(str)
-        movie_table["genres"] = movie_table["genres"].fillna("").astype(str)
-        movie_table = movie_table.drop_duplicates("movieId").set_index("movieId", drop=False)
+        movie_table = _movie_table(movies)
     configured_database_url = database_url or os.environ.get("DATABASE_URL")
     if configured_database_url is None and os.environ.get("VERCEL"):
         raise RuntimeError("Set DATABASE_URL to a persistent PostgreSQL database for Vercel.")
@@ -83,15 +98,7 @@ def create_app(
             content_model = content_model or loaded_content
             collaborative_model = collaborative_model or loaded_collaborative
             if movie_table is None:
-                movie_table = loaded_movies.loc[:, ["movieId", "title", "genres"]].copy()
-                movie_table["movieId"] = pd.to_numeric(
-                    movie_table["movieId"], errors="raise"
-                ).astype(int)
-                movie_table["title"] = movie_table["title"].fillna("").astype(str)
-                movie_table["genres"] = movie_table["genres"].fillna("").astype(str)
-                movie_table = movie_table.drop_duplicates("movieId").set_index(
-                    "movieId", drop=False
-                )
+                movie_table = _movie_table(loaded_movies)
         assert content_model is not None and collaborative_model is not None
         assert movie_table is not None
         app.state.content_model = content_model
@@ -136,6 +143,27 @@ def create_app(
             MovieResponse(movie_id=int(row.movieId), title=row.title, genres=row.genres)
             for row in matches.head(limit).itertuples()
         ]
+
+    @router.get("/movies/external-ratings", response_model=list[ExternalMovieRatings])
+    def external_ratings(
+        request: Request,
+        movie_ids: Annotated[list[int], Query(min_length=1, max_length=30)],
+    ) -> list[ExternalMovieRatings]:
+        movie_table = request.app.state.movies
+        unique_ids = list(dict.fromkeys(movie_ids))
+        unknown = [movie_id for movie_id in unique_ids if movie_id not in movie_table.index]
+        if unknown:
+            raise HTTPException(status_code=404, detail="One or more movies were not found")
+        rows = [movie_table.loc[movie_id] for movie_id in unique_ids]
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            values = list(pool.map(
+                lambda row: get_movie_ratings(
+                    int(row.movieId), str(row.title),
+                    getattr(row, "tmdbId", None), getattr(row, "imdbId", None),
+                ),
+                rows,
+            ))
+        return [ExternalMovieRatings.model_validate(value) for value in values]
 
     @router.get("/recommendations/similar/{movie_id}", response_model=list[RecommendationResponse])
     def similar_movies(

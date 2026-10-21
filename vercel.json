@@ -11,7 +11,7 @@
       "buildCommand": "bash scripts/setup_demo.sh --skip-evaluation",
       "functions": {
         "vercel_entry.py": {
-          "includeFiles": "{artifacts/content_recommender.joblib,artifacts/collaborative_recommender.joblib,data/processed/movies_with_tags.csv,src/recommender/**}"
+          "includeFiles": "{artifacts/content_recommender.joblib,artifacts/collaborative_recommender.joblib,data/processed/movies_with_tags.csv,data/processed/links.csv,src/recommender/**}"
         }
       }
     }
