@@ -129,6 +129,13 @@ class CollaborativeRecommender:
         return len(self._movie_ids)
 
     @property
+    def movie_ids(self) -> np.ndarray:
+        """Return a copy of movie IDs observed in the training ratings."""
+        self._require_fitted()
+        assert self._movie_ids is not None
+        return self._movie_ids.copy()
+
+    @property
     def training_rating_count(self) -> int:
         self._require_fitted()
         assert self._user_counts is not None
@@ -233,27 +240,37 @@ class CollaborativeRecommender:
         assert self._user_counts is not None and self._movie_counts is not None
         assert self._user_factors is not None and self._movie_factors is not None
 
-        predictions = np.empty(len(users), dtype=np.float64)
+        user_indices = np.fromiter(
+            (self._user_index.get(int(user_id), -1) for user_id in users),
+            dtype=np.int64,
+            count=len(users),
+        )
+        movie_indices = np.fromiter(
+            (self._movie_index.get(int(movie_id), -1) for movie_id in movies),
+            dtype=np.int64,
+            count=len(movies),
+        )
+        predictions = np.full(len(users), self.global_mean, dtype=np.float64)
+        known_users = user_indices >= 0
+        known_movies = movie_indices >= 0
+        predictions[known_users] += self._user_bias[user_indices[known_users]]
+        predictions[known_movies] += self._movie_bias[movie_indices[known_movies]]
         minimum_user_count = self.params["min_user_ratings"]
         minimum_movie_count = self.params["min_item_ratings"]
-        for row, (user_id, movie_id) in enumerate(zip(users, movies, strict=True)):
-            user_index = self._user_index.get(int(user_id))
-            movie_index = self._movie_index.get(int(movie_id))
-            score = self.global_mean
-            if user_index is not None:
-                score += self._user_bias[user_index]
-            if movie_index is not None:
-                score += self._movie_bias[movie_index]
-            has_factors = (
-                user_index is not None
-                and movie_index is not None
-                and self._user_counts[user_index] >= minimum_user_count
-                and self._movie_counts[movie_index] >= minimum_movie_count
+        has_factors = known_users & known_movies
+        has_factors[known_users] &= (
+            self._user_counts[user_indices[known_users]] >= minimum_user_count
+        )
+        has_factors[known_movies] &= (
+            self._movie_counts[movie_indices[known_movies]] >= minimum_movie_count
+        )
+        if algorithm != "baseline" and has_factors.any():
+            selected_users = user_indices[has_factors]
+            selected_movies = movie_indices[has_factors]
+            predictions[has_factors] += np.sum(
+                self._user_factors[selected_users] * self._movie_factors[selected_movies], axis=1
             )
-            if algorithm != "baseline" and has_factors:
-                score += self._user_factors[user_index] @ self._movie_factors[movie_index]
-            predictions[row] = np.clip(score, 0.5, 5.0)
-        return predictions
+        return np.clip(predictions, 0.5, 5.0)
 
     def evaluate(self, ratings: pd.DataFrame, *, algorithm: str = "auto") -> RatingMetrics:
         """Measure RMSE and MAE on a held-out ratings table."""
@@ -291,6 +308,20 @@ class CollaborativeRecommender:
             )
             for index in candidate_indices[order[:top_k]]
         ]
+
+    def popularity_scores(self, movie_ids: Iterable[int]) -> np.ndarray:
+        """Return shrinkage-adjusted training rating means in the requested order."""
+        self._require_fitted()
+        assert self._popularity_scores is not None and self.global_mean is not None
+        return np.asarray(
+            [
+                self._popularity_scores[self._movie_index[int(movie_id)]]
+                if int(movie_id) in self._movie_index
+                else self.global_mean
+                for movie_id in movie_ids
+            ],
+            dtype=np.float64,
+        )
 
     def recommend_for_user(
         self,

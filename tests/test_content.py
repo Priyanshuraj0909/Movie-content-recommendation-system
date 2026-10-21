@@ -1,5 +1,6 @@
 import json
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -65,6 +66,20 @@ def test_empty_results_when_no_positive_similarity(movies: pd.DataFrame) -> None
 
     assert recommender.similar_movies(4, top_k=5) == []
     assert recommender.similar_movies(1, top_k=0) == []
+
+
+def test_profile_scores_liked_movies_and_handles_unknown_candidates(
+    movies: pd.DataFrame,
+) -> None:
+    recommender = ContentRecommender().fit(movies)
+
+    scores = recommender.score_profile([1], [2, 3, 4, 999])
+
+    assert scores[0] > 0
+    assert scores[1] == scores[0]
+    assert scores[2] == 0
+    assert scores[3] == 0
+    np.testing.assert_array_equal(recommender.score_profile([], [1, 2]), [0.0, 0.0])
 
 
 def test_model_save_and_load_preserve_rankings(tmp_path, movies: pd.DataFrame) -> None:

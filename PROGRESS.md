@@ -1,5 +1,5 @@
 # Project Progress
-Current phase: Phase 4 — COMPLETE
+Current phase: Phase 5 — COMPLETE
 
 | Phase | Status | Evidence |
 |---|---|---|
@@ -7,7 +7,7 @@ Current phase: Phase 4 — COMPLETE
 | 2 Data | Complete | Python 3.12 ARM64; `python -m pytest -q` (8 passed); `python -m ruff check .` (passed); official archive checksum verified. |
 | 3 Content model | Complete | Python 3.12 ARM64; `python -m pytest -q` (14 passed); `python -m ruff check .` (passed); trained and loaded artifact on all 9,742 movies. |
 | 4 Collaborative | Complete | Python 3.12 ARM64; `python -m pytest -q` (21 passed); `python -m ruff check .` (passed); compared models on 9,818 validation ratings. |
-| 5 Hybrid & evaluation | Not started | |
+| 5 Hybrid & evaluation | Complete | Python 3.12 ARM64; `python -m pytest -q` (25 passed); `python -m ruff check .` (passed); validation-tuned blend evaluated on untouched test split. |
 | 6 API & database | Not started | |
 | 7 UI | Not started | |
 | 8 Deployment | Not started | |
@@ -42,3 +42,12 @@ None recorded.
 - Validation bias baseline: RMSE 0.8914, MAE 0.6854. Matrix factorization: RMSE 0.8808, MAE 0.6742.
 - Saved `artifacts/collaborative_recommender.joblib` and `artifacts/collaborative_metrics.json`; both remain ignored by Git.
 - Verified unknown and sparse-user fallbacks, seen-item exclusion, deterministic training and artifact reload.
+
+## Phase 5 Notes
+- Added normalized popularity, content-profile and collaborative ranking scores with a weighted hybrid blend.
+- Tuned collaborative weight on validation only; selected `0.75` by NDCG@10 over weights 0.00, 0.25, 0.50, 0.75 and 1.00.
+- Candidates are the 8,255 training-rated movies; each user's training history is excluded. Relevance is a held-out rating of at least 4.0.
+- Validation at the selected weight (553 eligible users): Precision@10 0.0306, Recall@10 0.0532, NDCG@10 0.0530, coverage 0.0497, novelty 10.0032.
+- Untouched test at the selected weight (557 eligible users): Precision@10 0.0264, Recall@10 0.0435, NDCG@10 0.0381, coverage 0.0492, novelty 9.9970.
+- Test NDCG@10 comparison: popularity 0.0317, content 0.0112, collaborative 0.0326, hybrid 0.0381.
+- Saved the full protocol and metric report to `artifacts/ranking_metrics.json`; generated artifacts remain ignored by Git.

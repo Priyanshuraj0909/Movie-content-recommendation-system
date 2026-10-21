@@ -134,6 +134,43 @@ class ContentRecommender:
         """Load a prepared ``movies_with_tags.csv`` file and fit the model."""
         return cls().fit(pd.read_csv(path))
 
+    def score_profile(
+        self,
+        seed_movie_ids: Iterable[int],
+        candidate_movie_ids: Iterable[int],
+    ) -> np.ndarray:
+        """Score candidates by cosine similarity to a profile of liked movies.
+
+        Scores are returned in candidate order. Unknown candidates score zero;
+        unknown seed IDs raise ``KeyError``. An empty seed list returns zeros.
+        """
+        self._require_fitted()
+        seeds = sorted({int(movie_id) for movie_id in seed_movie_ids})
+        candidates = [int(movie_id) for movie_id in candidate_movie_ids]
+        if not seeds:
+            return np.zeros(len(candidates), dtype=np.float64)
+        unknown_seeds = [movie_id for movie_id in seeds if movie_id not in self._index_by_id]
+        if unknown_seeds:
+            raise KeyError(f"Unknown seed movie IDs: {unknown_seeds[:5]}")
+
+        assert self._tfidf is not None
+        seed_indices = [self._index_by_id[movie_id] for movie_id in seeds]
+        profile = np.asarray(self._tfidf[seed_indices].sum(axis=0)).ravel()
+        profile_norm = np.linalg.norm(profile)
+        if profile_norm == 0:
+            return np.zeros(len(candidates), dtype=np.float64)
+        profile /= profile_norm
+        scores = np.zeros(len(candidates), dtype=np.float64)
+        known_positions = [
+            (position, self._index_by_id[movie_id])
+            for position, movie_id in enumerate(candidates)
+            if movie_id in self._index_by_id
+        ]
+        if known_positions:
+            positions, indices = zip(*known_positions, strict=True)
+            scores[list(positions)] = np.asarray(self._tfidf[list(indices)] @ profile).ravel()
+        return scores
+
     def similar_movies(
         self,
         movie_id: int,

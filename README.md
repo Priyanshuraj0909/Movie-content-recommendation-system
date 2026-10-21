@@ -98,6 +98,27 @@ shrinkage-adjusted popularity ranking for cold-start recommendation requests.
 Recommendations exclude items present in the training history and any
 additional IDs supplied by the caller.
 
+## Tune and evaluate hybrid rankings
+
+```bash
+python -m recommender.evaluation.ranking
+```
+
+This compares popularity, content-profile, collaborative and hybrid rankings.
+It tunes the collaborative blend weight over `0.00, 0.25, 0.50, 0.75, 1.00`
+using validation NDCG@10 (then Recall@10 and Precision@10 to break ties), and
+evaluates the selected weight on the untouched test split. Relevance means a
+rating of at least 4.0. Every method receives the same candidates: movies with
+at least one training rating, after removing that user's training history.
+Only users with at least one relevant held-out item in this candidate set are
+included. Coverage is the fraction of the training item catalog recommended;
+novelty is mean self-information from training item frequencies.
+
+The protocol and metrics are written to `artifacts/ranking_metrics.json`.
+Dataset splits and model artifacts must be prepared first. Metrics describe
+this MovieLens development dataset and split; they are not a general
+performance guarantee.
+
 ## Quality checks
 
 ```bash
