@@ -11,7 +11,7 @@ Current phase: Phase 9 — IN PROGRESS
 | 6 API & database | Complete | Python 3.12 ARM64; `python -m pytest -q` (29 passed); `python -m ruff check .` (passed); FastAPI routes verified with temporary SQLite integration tests. |
 | 7 UI | Complete | Python 3.12 ARM64; `python -m pytest -q` (33 passed); `python -m ruff check .` (passed); live Streamlit walkthrough covered search, rating, cold-start, similar films and offline states. |
 | 8 Deployment | Complete | Python 3.12 ARM64; `python -m pytest -q` (34 passed); `python -m ruff check .` (passed); 34 tests also passed in a fresh-clone simulation with datasets and artifacts excluded. |
-| 9 Vercel deployment | Deployed; rating POST verification pending | Commit `c9ea803` is live on Vercel production. Production page, `/api/health` (9,742 movies), and `/api/movies/search?q=matrix` returned HTTP 200. Local API integration tests cover rating create/update; the available hosted fetch tool supports GET only, so a production rating write was not exercised. |
+| 9 Vercel deployment | Deployed; rating POST verification pending | Commit `782eaa5` is live on Vercel production. Production page, `/api/health` (9,742 movies), and `/api/movies/external-ratings?movie_ids=1` returned HTTP 200. Local API integration tests cover rating create/update; the available hosted fetch tool supports GET only, so a production rating write was not exercised. |
 
 ## Decisions
 - Python 3.11/3.12 ARM64 environment preferred.
@@ -85,4 +85,5 @@ None recorded.
 - Added responsive source badges to web movie cards and a details-dialog ratings section with vote counts and official links. Added TMDB logo attribution and its non-endorsement notice.
 - Added optional server-only environment variable names to `.env.example`, README setup/deployment instructions, and mocked tests for both/one/missing providers, `N/A`, timeouts, invalid credentials, caching, ID matching and title/year fallback verification.
 - Verification: `.venv/bin/python -m pytest -q` (51 passed); `.venv/bin/python -m ruff check .`, `node --check frontend/web/app.js`, Vercel JSON parsing and `git diff --check` passed.
-- Live provider responses and hosted deployment remain unverified because no TMDB/OMDb keys have been configured. The changes are local only and have not been pushed.
+- Production deployment `782eaa5` is READY. Production health and ratings API requests returned HTTP 200; the ratings response includes the catalog's TMDB/IMDb IDs and source links while scores remain absent because no TMDB/OMDb keys are configured. Local test doubles verify provider response handling, but live provider ratings remain unverified until credentials are added.
+- Both feature commits are pushed to GitHub `main`; the working tree is clean.

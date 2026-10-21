@@ -274,6 +274,11 @@ browser):
 - [Similar films for The Matrix](https://cinematch-king-09.vercel.app/api/recommendations/similar/2571?limit=5)
 - [Popular picks for profile 123456789](https://cinematch-king-09.vercel.app/api/recommendations/users/123456789?limit=10)
 
+The IMDb/TMDB ratings feature is deployed. To show live numeric scores, add
+`TMDB_API_READ_ACCESS_TOKEN` and `OMDB_API_KEY` to the `cinematch` project's
+Production environment in Vercel, then redeploy. Until then the app keeps
+scores blank and can still show known official movie links.
+
 To set up or redeploy this project on Vercel, connect the GitHub repository,
 configure `DATABASE_URL` as a Vercel environment secret for Preview and
 Production, and configure `TMDB_API_READ_ACCESS_TOKEN` and `OMDB_API_KEY` as
