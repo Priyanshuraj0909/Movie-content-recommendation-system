@@ -1,6 +1,9 @@
 # Movie Recommendation System
 
-A local-first, phase-driven project for building and evaluating content-based, collaborative, and hybrid movie recommendations. It is designed to run on Apple Silicon and uses MovieLens latest-small as the initial dataset. MovieLens genres and tags are treated as metadata, not plot descriptions.
+A local-first, phase-driven project for building and evaluating content-based,
+collaborative, and hybrid movie recommendations. It is designed to run on Apple
+Silicon and uses MovieLens latest-small as the initial dataset. MovieLens genres
+and tags are treated as metadata, not plot descriptions.
 
 ## Requirements
 
@@ -31,7 +34,8 @@ python -m pip install -e .
 python -m recommender
 ```
 
-The command prints the configured local data and artifact paths. It does not download data or create model files.
+The command prints the configured local data and artifact paths. It does not
+download data or create model files.
 
 ## Quality checks
 
@@ -40,4 +44,17 @@ python -m pytest -q
 python -m ruff check .
 ```
 
-See `AGENTS.md`, `MASTER_ORCHESTRATOR.md`, `PLAN.md`, and `PROGRESS.md` for the project workflow and current verified status. No dataset, model, API key, or `.env` file belongs in Git.
+## Project layout
+
+- `src/recommender/data/`: dataset loading and preprocessing
+- `src/recommender/models/`: recommendation algorithms
+- `src/recommender/evaluation/`: offline evaluation
+- `src/recommender/services/`: shared application services
+- `backend/app/`: API application
+- `tests/`: automated checks and privacy-safe fixtures
+- `docs/phases/`: phase contracts and acceptance criteria
+- `data/raw/`, `data/processed/`, `artifacts/`: local generated files, excluded from Git
+
+See `AGENTS.md`, `MASTER_ORCHESTRATOR.md`, `PLAN.md`, and `PROGRESS.md` for the
+project workflow and current verified status. No dataset, model, API key, or
+`.env` file belongs in Git.

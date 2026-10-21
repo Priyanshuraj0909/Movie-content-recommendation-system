@@ -1,0 +1,2 @@
+# AI Agent Instructions
+Read MASTER_ORCHESTRATOR.md, PLAN.md, and the active docs/phases/PHASE_XX.md before changing code. Work on one phase at a time. Inspect existing files first. Explain intended changes briefly. Never invent test results. Run the phase checks and update PROGRESS.md only after verification. Ask before deleting data, changing architecture, installing major dependencies, or using external credentials. Keep datasets and secrets out of git. Prefer reproducible, simple, Apple Silicon-compatible implementations.
