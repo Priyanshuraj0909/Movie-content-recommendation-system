@@ -10,6 +10,7 @@ from backend.app.main import create_app
 from backend.app.models import UserRating
 from recommender.models.collaborative import CollaborativeRecommender
 from recommender.models.content import ContentRecommender
+from scripts.verify_deployment import verify
 
 
 @pytest.fixture
@@ -18,7 +19,7 @@ def client(tmp_path: Path) -> TestClient:
         {
             "movieId": [1, 2, 3, 4, 5],
             "title": [
-                "Star Voyage (2000)",
+                "Toy Star Voyage (2000)",
                 "Galaxy Journey (2001)",
                 "Space Mystery (2002)",
                 "Ocean Story (2003)",
@@ -119,6 +120,38 @@ def test_rating_input_validation_and_unknown_movie(client: TestClient) -> None:
         "/api/ratings", json={"user_id": 3, "movie_id": 999, "rating": 4.0}
     )
     assert unknown_movie.status_code == 404
+
+
+def test_deployment_verification_defaults_to_read_only(client: TestClient) -> None:
+    assert verify(client) == ["health", "search", "similar films", "recommendations"]
+    with client.app.state.session_factory() as session:
+        assert session.scalars(select(UserRating)).all() == []
+
+
+def test_deployment_rating_checks_and_restart_persistence(client: TestClient) -> None:
+    checks = verify(client, write_user_id=2_000_000_002)
+    assert checks[-2:] == ["rating create/update", "saved-rating exclusion"]
+    state = client.app.state
+    with state.session_factory() as session:
+        saved = session.scalars(select(UserRating)).all()
+        assert len(saved) == 1
+        assert saved[0].rating == 4.5
+        database_url = str(session.get_bind().url)
+    restarted = create_app(
+        content_model=state.content_model,
+        collaborative_model=state.collaborative_model,
+        movies=state.movies.reset_index(drop=True),
+        database_url=database_url,
+    )
+    with TestClient(restarted) as fresh_client:
+        response = fresh_client.get("/api/recommendations/users/2000000002")
+        assert response.status_code == 200
+        assert response.json()
+        assert all(item["movie_id"] != 1 for item in response.json())
+        with restarted.state.session_factory() as session:
+            saved = session.scalars(select(UserRating)).all()
+            assert len(saved) == 1
+            assert saved[0].rating == 4.5
 
 
 def test_default_app_loads_models_during_startup(

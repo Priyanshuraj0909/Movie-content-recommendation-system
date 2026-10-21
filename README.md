@@ -267,7 +267,29 @@ For a separate Vercel setup:
 
 `vercel.json` defines the frontend/API services and includes processed `links.csv` in the API bundle for stable provider ID matching. Provider keys are optional for the app to run, but required for numeric public ratings. The deployed health and ratings GET endpoints have been verified. Production rating POST persistence has not yet been exercised.
 
-Optional Docker Compose demo:
+### Verify a running deployment
+
+Run read-only API checks from the configured virtual environment:
+
+```bash
+python scripts/verify_deployment.py --base-url https://cinematch-king-09.vercel.app
+```
+
+To also check rating create/update and exclusion from recommendations, supply a
+dedicated test profile ID that is not used by a real visitor:
+
+```bash
+python scripts/verify_deployment.py --base-url http://127.0.0.1:8000 --write-user-id 2000000002
+```
+
+The write check leaves one 4.5-star rating saved on that profile. It does not delete
+ratings or verify persistence across hosted restarts. Automated integration tests
+separately verify persistence across local application instances using SQLite.
+The script fails on HTTP errors, redirects, and HTML authentication pages. A
+deployment protected by Vercel Authentication requires authorized access before
+its live API can be verified; a login page is not evidence of a healthy API.
+
+### Docker Compose
 
 ```bash
 docker compose up --build

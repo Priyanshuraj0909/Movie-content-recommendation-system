@@ -18,7 +18,10 @@ Current phase: Phase 9 — IN PROGRESS
 - MovieLens latest-small for initial MVP.
 
 ## Blockers
-None recorded.
+- 2026-10-21: The production `/api/health` request returned a Vercel Authentication
+  page instead of API JSON. Authorized deployment access is needed to verify the
+  live health, search, similar-film, recommendation and rating flows. Hosted
+  database persistence remains unverified; Phase 9 remains in progress.
 
 ## Phase 1 Notes
 - Installed the project requirements and editable package in `.venv`.
@@ -87,3 +90,23 @@ None recorded.
 - Verification: `.venv/bin/python -m pytest -q` (51 passed); `.venv/bin/python -m ruff check .`, `node --check frontend/web/app.js`, Vercel JSON parsing and `git diff --check` passed.
 - Production deployment `782eaa5` is READY. Production health and ratings API requests returned HTTP 200; the ratings response includes the catalog's TMDB/IMDb IDs and source links while scores remain absent because no TMDB/OMDb keys are configured. Local test doubles verify provider response handling, but live provider ratings remain unverified until credentials are added.
 - Both feature commits are pushed to GitHub `main`; the working tree is clean.
+
+## Phase 9 verification follow-up — 2026-10-21
+- Restored the ignored local `.venv` using Python 3.12 and the existing declared
+  project dependencies; no dependency specification changed.
+- Added `scripts/verify_deployment.py` for repeatable health, search, similar-film
+  and recommendation checks. Rating create/update and saved-item exclusion run
+  only when a dedicated `--write-user-id` is supplied. No production rating was
+  written during this follow-up.
+- Added integration checks for read-only verification, rating create/update,
+  saved-item exclusion, and SQLite persistence across fresh application
+  instances. Added checks that reject HTML login pages and failing API responses.
+- Verification: `.venv/bin/python -m pytest -q` (56 passed, one existing
+  Starlette/httpx deprecation warning); `.venv/bin/python -m ruff check .` (passed);
+  `node --check frontend/web/app.js`, `.venv/bin/python -m json.tool vercel.json`,
+  and `git diff --check` (passed).
+- Live verification is blocked by Vercel Authentication. Browser walkthrough and
+  hosted PostgreSQL persistence have not been verified in this follow-up.
+- Remaining recommendation work: isolate visitor profile IDs from MovieLens IDs
+  and personalize collaborative factors from visitor ratings. These changes are
+  outside the active deployment phase and have not been implemented here.
