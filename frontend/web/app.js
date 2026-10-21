@@ -1,216 +1,544 @@
 const API = "/api";
-const $ = (selector) => document.querySelector(selector);
-const profileInput = $("#profile-id");
-let selectedSeed = null;
-let seedDebounce;
-let toastTimeout;
+const $ = (selector, root = document) => root.querySelector(selector);
+const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+const PALETTE = ["#6c51aa", "#8b4c75", "#375f77", "#83603e", "#514b8b", "#397061", "#8c4850", "#526483"];
+const WATCHLIST_KEY = "cinematch.watchlist";
+const PROFILE_KEY = "cinematch.profileId";
+let profileId = readProfileId();
+let currentSearchResults = [];
+let activeGenre = "";
+let searchTimer;
+let toastTimer;
+let activeMovie = null;
 
-function profileId() {
-  const value = Math.max(1, Number.parseInt(profileInput.value, 10) || 1001);
-  profileInput.value = String(value);
-  localStorage.setItem("cinematch.profileId", String(value));
-  $("#profile-label").textContent = String(value);
-  return value;
+function readProfileId() {
+  const stored = Number.parseInt(localStorage.getItem(PROFILE_KEY), 10);
+  if (Number.isSafeInteger(stored) && stored > 0) return stored;
+  const entropy = new Uint32Array(1);
+  crypto.getRandomValues(entropy);
+  const generated = 100000000 + (entropy[0] % 1800000000);
+  localStorage.setItem(PROFILE_KEY, String(generated));
+  return generated;
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(`${API}${path}`, {
+  const response = await fetch(API + path, {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options,
   });
   if (!response.ok) {
-    let detail = `Request failed (${response.status})`;
-    try { detail = (await response.json()).detail || detail; } catch { /* Keep the status message. */ }
-    throw new Error(detail);
+    let message = "The cinema service returned " + response.status + ".";
+    try {
+      const payload = await response.json();
+      message = payload.detail || message;
+    } catch { /* Keep the readable status message. */ }
+    throw new Error(message);
   }
   return response.json();
 }
 
-function setConnection(state, message) {
-  const indicator = $("#connection");
-  indicator.className = `connection ${state}`;
-  indicator.lastElementChild.textContent = message;
+function getWatchlist() {
+  try {
+    const value = JSON.parse(localStorage.getItem(WATCHLIST_KEY) || "[]");
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
 }
 
-function toast(message) {
-  const element = $("#toast");
-  element.textContent = message;
-  element.classList.add("show");
-  clearTimeout(toastTimeout);
-  toastTimeout = setTimeout(() => element.classList.remove("show"), 3000);
+function saveWatchlist(items) {
+  localStorage.setItem(WATCHLIST_KEY, JSON.stringify(items));
+  updateWatchlistCount();
 }
 
-function showError(container, message) {
+function updateWatchlistCount() {
+  $("#watchlist-count").textContent = String(getWatchlist().length);
+}
+
+function hashTitle(title) {
+  let hash = 0;
+  for (let index = 0; index < title.length; index += 1) {
+    hash = ((hash << 5) - hash + title.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+function getYear(title) {
+  const match = String(title).match(/\((\d{4})\)\s*$/);
+  return match ? match[1] : "";
+}
+
+function getGenres(movie) {
+  return String(movie.genres || "")
+    .split("|")
+    .filter((genre) => genre && genre !== "(no genres listed)");
+}
+
+function showToast(message, isError = false) {
+  const toast = $("#toast");
+  toast.textContent = message;
+  toast.classList.toggle("error", isError);
+  toast.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove("show"), 3300);
+}
+
+function showEmpty(container, title, message, isError = false) {
   container.replaceChildren();
-  const state = document.createElement("div");
-  state.className = "empty-state";
-  const text = document.createElement("p");
-  text.textContent = message;
-  state.append(text);
-  container.append(state);
+  const panel = document.createElement("div");
+  panel.className = "empty-panel" + (isError ? " error-panel" : "");
+  const icon = document.createElement("span");
+  icon.className = "empty-symbol";
+  icon.textContent = isError ? "!" : "✧";
+  const heading = document.createElement("h2");
+  heading.textContent = title;
+  const copy = document.createElement("p");
+  copy.textContent = message;
+  panel.append(icon, heading, copy);
+  container.append(panel);
 }
 
-function makeMovieCard(movie, key) {
-  const card = document.createElement("article");
-  card.className = "movie-card";
+function isSaved(movieId) {
+  return getWatchlist().some((movie) => Number(movie.movie_id) === Number(movieId));
+}
+
+function toggleWatchlist(movie) {
+  const list = getWatchlist();
+  const existing = list.findIndex((item) => Number(item.movie_id) === Number(movie.movie_id));
+  if (existing >= 0) {
+    list.splice(existing, 1);
+    saveWatchlist(list);
+    showToast("Removed from your watchlist.");
+  } else {
+    list.unshift({
+      movie_id: Number(movie.movie_id),
+      title: String(movie.title),
+      genres: String(movie.genres || ""),
+      score: Number.isFinite(movie.score) ? movie.score : null,
+      saved_at: Date.now(),
+    });
+    saveWatchlist(list);
+    showToast("Saved for your next movie night.");
+  }
+  renderWatchlist();
+  if (activeMovie && Number(activeMovie.movie_id) === Number(movie.movie_id)) updateDialogWatchlistButton();
+}
+
+function makePoster(movie) {
+  const poster = document.createElement("div");
+  poster.className = "poster-art";
+  poster.style.setProperty("--poster-color", PALETTE[hashTitle(movie.title) % PALETTE.length]);
+  poster.setAttribute("role", "img");
+  poster.setAttribute("aria-label", "Original CineMatch artwork for " + movie.title);
+
+  const orbit = document.createElement("span");
+  orbit.className = "poster-orbit";
+  orbit.setAttribute("aria-hidden", "true");
+  const number = document.createElement("span");
+  number.className = "poster-number";
+  number.textContent = "CINEMATCH · " + String(movie.movie_id).padStart(4, "0");
+  const words = document.createElement("div");
   const title = document.createElement("h3");
-  title.className = "movie-title";
-  title.textContent = movie.title;
-  const meta = document.createElement("div");
-  meta.className = "movie-meta";
-  meta.textContent = movie.genres || "Genre not listed";
-  card.append(title, meta);
-  if (Number.isFinite(movie.score)) {
-    const score = document.createElement("span");
-    score.className = "movie-score";
-    score.textContent = `Match ${Math.round(movie.score * 100)}%`;
-    card.append(score);
+  title.className = "poster-title";
+  title.textContent = movie.title.replace(/\s*\(\d{4}\)\s*$/, "");
+  const year = getYear(movie.title);
+  if (year) {
+    const yearLabel = document.createElement("p");
+    yearLabel.className = "poster-year";
+    yearLabel.textContent = year;
+    words.append(title, yearLabel);
+  } else {
+    words.append(title);
   }
-  if (Number.isFinite(movie.predicted_rating)) {
-    const predicted = document.createElement("div");
-    predicted.className = "movie-meta";
-    predicted.style.marginTop = "6px";
-    predicted.textContent = `Predicted rating ${movie.predicted_rating.toFixed(1)} / 5`;
-    card.append(predicted);
-  }
-  const actions = document.createElement("div");
-  actions.className = "card-actions";
+  poster.append(orbit, number, words);
+  return poster;
+}
+
+function makeRatingControls(movie) {
+  const controls = document.createElement("div");
+  controls.className = "card-rating";
   const select = document.createElement("select");
-  select.setAttribute("aria-label", `Your rating for ${movie.title}`);
+  select.setAttribute("aria-label", "Your rating for " + movie.title);
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "Rate it";
+  placeholder.selected = true;
+  select.append(placeholder);
   for (let value = 5; value >= 0.5; value -= 0.5) {
     const option = document.createElement("option");
     option.value = String(value);
-    option.textContent = `${value.toFixed(1)} ★`;
+    option.textContent = value.toFixed(1) + " ★";
     select.append(option);
   }
-  const save = document.createElement("button");
-  save.type = "button";
-  save.className = "rate-button";
-  save.textContent = "Save rating";
-  save.addEventListener("click", async () => {
-    save.disabled = true;
-    save.textContent = "Saving…";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = "Save";
+  button.addEventListener("click", async () => {
+    const rating = Number(select.value);
+    if (!rating) {
+      showToast("Choose a rating first.", true);
+      select.focus();
+      return;
+    }
+    button.disabled = true;
+    button.textContent = "…";
     try {
       await request("/ratings", {
         method: "POST",
-        body: JSON.stringify({ user_id: profileId(), movie_id: movie.movie_id, rating: Number(select.value) }),
+        body: JSON.stringify({ user_id: profileId, movie_id: Number(movie.movie_id), rating }),
       });
-      toast("Rating saved. Your picks will keep learning from it.");
+      showToast("Rating saved. Your next picks will learn from it.");
+      if ($("#page-recommendations").classList.contains("active")) loadRecommendations();
+      if ($("#page-home").classList.contains("active")) loadHomePicks();
     } catch (error) {
-      toast(error.message);
+      showToast(error.message, true);
     } finally {
-      save.disabled = false;
-      save.textContent = "Save rating";
+      button.disabled = false;
+      button.textContent = "Save";
     }
   });
-  actions.append(select, save);
-  card.append(actions);
+  controls.append(select, button);
+  return controls;
+}
+
+function makeMovieCard(movie) {
+  const card = document.createElement("article");
+  card.className = "movie-card";
+  const posterWrap = document.createElement("div");
+  posterWrap.className = "poster-wrap";
+  const poster = makePoster(movie);
+  const topActions = document.createElement("div");
+  topActions.className = "poster-top-actions";
+  const save = document.createElement("button");
+  save.className = "poster-icon-button" + (isSaved(movie.movie_id) ? " saved" : "");
+  save.type = "button";
+  save.setAttribute("aria-label", (isSaved(movie.movie_id) ? "Remove " : "Add ") + movie.title + " " + (isSaved(movie.movie_id) ? "from" : "to") + " watchlist");
+  save.title = isSaved(movie.movie_id) ? "Remove from watchlist" : "Add to watchlist";
+  save.textContent = isSaved(movie.movie_id) ? "✓" : "＋";
+  save.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleWatchlist(movie);
+    const saved = isSaved(movie.movie_id);
+    save.classList.toggle("saved", saved);
+    save.textContent = saved ? "✓" : "＋";
+    save.title = saved ? "Remove from watchlist" : "Add to watchlist";
+  });
+  topActions.append(save);
+  posterWrap.append(poster, topActions);
+
+  const info = document.createElement("div");
+  info.className = "movie-card-info";
+  const title = document.createElement("h3");
+  title.className = "movie-title";
+  title.textContent = movie.title;
+  const genres = document.createElement("p");
+  genres.className = "movie-meta";
+  genres.textContent = getGenres(movie).slice(0, 3).join(" · ") || "Genre not listed";
+  const bottom = document.createElement("div");
+  bottom.className = "movie-card-bottom";
+  if (Number.isFinite(movie.score)) {
+    const score = document.createElement("span");
+    score.className = "movie-score";
+    score.textContent = "Match " + Math.round(movie.score * 100) + "%";
+    bottom.append(score);
+  }
+  const detail = document.createElement("button");
+  detail.className = "movie-detail-link";
+  detail.type = "button";
+  detail.textContent = "Details";
+  detail.addEventListener("click", () => openMovie(movie));
+  bottom.append(detail);
+  info.append(title, genres, bottom, makeRatingControls(movie));
+  card.append(posterWrap, info);
   return card;
 }
 
-function renderMovies(container, movies) {
+function renderMovies(container, movies, emptyTitle, emptyMessage) {
   container.replaceChildren();
   if (!movies.length) {
-    showError(container, "No films found. Try another title or rate a few favorites first.");
+    showEmpty(container, emptyTitle, emptyMessage);
     return;
   }
-  const grid = document.createElement("div");
-  grid.className = "movie-grid";
-  movies.forEach((movie, index) => grid.append(makeMovieCard(movie, index)));
-  container.append(grid);
+  movies.forEach((movie) => container.append(makeMovieCard(movie)));
+}
+
+function setConnection(status, message) {
+  const connection = $("#connection");
+  connection.className = "connection " + status;
+  $(".connection > span:last-child", connection).textContent = message;
 }
 
 async function checkHealth() {
   try {
     const health = await request("/health");
-    setConnection("online", `Connected · ${health.movies_loaded.toLocaleString()} movies`);
+    setConnection("online", "Connected · " + Number(health.movies_loaded).toLocaleString() + " films");
+    $("#catalog-count").textContent = Number(health.movies_loaded).toLocaleString() + " stories in the collection";
   } catch {
-    setConnection("offline", "Recommendation service unavailable");
+    setConnection("offline", "Cinema unavailable");
   }
 }
 
-async function searchMovies(query, limit = 20) {
-  const params = new URLSearchParams({ q: query, limit: String(limit) });
-  return request(`/movies/search?${params}`);
+async function loadHomePicks() {
+  const container = $("#home-picks");
+  try {
+    const movies = await request("/recommendations/users/" + profileId + "?limit=12");
+    renderMovies(container, movies, "Let’s find your first favorite.", "Rate a film you love to shape recommendations for this profile.");
+  } catch (error) {
+    showEmpty(container, "Your picks couldn’t load.", error.message, true);
+  }
 }
 
-async function discover() {
+async function loadRecommendations() {
+  const container = $("#personal-results");
+  container.innerHTML = '<div class="skeleton-grid"><span></span><span></span><span></span><span></span><span></span></div>';
+  $("#profile-label").textContent = String(profileId);
+  try {
+    const movies = await request("/recommendations/users/" + profileId + "?limit=30");
+    renderMovies(container, movies, "Your next story is one rating away.", "Explore the collection and rate a film you already love.");
+  } catch (error) {
+    showEmpty(container, "Recommendations aren’t available right now.", error.message, true);
+  }
+}
+
+function makeSuggestion(movie) {
+  const button = document.createElement("button");
+  button.className = "suggestion";
+  button.type = "button";
+  const title = document.createElement("span");
+  title.textContent = movie.title;
+  const genre = document.createElement("small");
+  genre.textContent = getGenres(movie).slice(0, 2).join(" · ");
+  button.append(title, genre);
+  button.addEventListener("click", () => {
+    $("#movie-search").value = movie.title;
+    $("#search-suggestions").hidden = true;
+    showExplore([movie], movie.title);
+  });
+  return button;
+}
+
+function showExplore(movies, query) {
+  currentSearchResults = movies;
+  activeGenre = "";
+  $("#search-caption").textContent = movies.length + (movies.length === 1 ? " film" : " films") + " matching “" + query + "”";
+  const filterContainer = $("#genre-filters");
+  filterContainer.replaceChildren();
+  const genres = Array.from(new Set(movies.flatMap(getGenres))).sort((a, b) => a.localeCompare(b));
+  if (genres.length > 1) {
+    const all = makeFilterChip("All genres", "");
+    all.classList.add("active");
+    filterContainer.append(all);
+    genres.forEach((genre) => filterContainer.append(makeFilterChip(genre, genre)));
+  }
+  renderFilteredResults();
+}
+
+function makeFilterChip(label, value) {
+  const chip = document.createElement("button");
+  chip.type = "button";
+  chip.className = "filter-chip";
+  chip.textContent = label;
+  chip.addEventListener("click", () => {
+    activeGenre = value;
+    $$(".filter-chip", $("#genre-filters")).forEach((item) => item.classList.toggle("active", item === chip));
+    renderFilteredResults();
+  });
+  return chip;
+}
+
+function renderFilteredResults() {
+  const filtered = activeGenre
+    ? currentSearchResults.filter((movie) => getGenres(movie).includes(activeGenre))
+    : currentSearchResults;
+  renderMovies($("#explore-results"), filtered, "No films in this filter.", "Try another genre or search for a different title.");
+}
+
+async function searchMovies(query, limit = 30) {
+  const params = new URLSearchParams({ q: query, limit: String(limit) });
+  return request("/movies/search?" + params.toString());
+}
+
+async function runSearch(showSuggestions = true) {
   const query = $("#movie-search").value.trim();
-  const results = $("#discover-results");
-  if (!query) {
-    showError(results, "Search for a film, then rate it to shape your personal picks.");
+  const suggestions = $("#search-suggestions");
+  if (query.length < 2) {
+    suggestions.hidden = true;
+    if (!query) showEmpty($("#explore-results"), "Every great watch starts somewhere.", "Search a title to discover films from the catalog.");
     return;
   }
-  results.innerHTML = '<div class="loading-state">Searching the collection…</div>';
-  try { renderMovies(results, await searchMovies(query)); }
-  catch (error) { showError(results, error.message); }
-}
-
-async function loadPicks() {
-  const container = $("#personal-results");
-  container.innerHTML = '<div class="loading-state">Finding a few good stories…</div>';
-  try { renderMovies(container, await request(`/recommendations/users/${profileId()}?limit=12`)); }
-  catch (error) { showError(container, error.message); }
-}
-
-async function searchSeeds() {
-  const query = $("#similar-search").value.trim();
-  const list = $("#similar-seeds");
-  const results = $("#similar-results");
-  selectedSeed = null;
-  results.replaceChildren();
-  if (query.length < 2) { list.replaceChildren(); return; }
+  $("#search-caption").textContent = "Searching the collection…";
   try {
-    const movies = await searchMovies(query, 8);
-    list.replaceChildren();
-    movies.forEach((movie) => {
-      const option = document.createElement("button");
-      option.type = "button";
-      option.className = "seed-option";
-      const name = document.createElement("span");
-      name.textContent = movie.title;
-      const genre = document.createElement("small");
-      genre.textContent = movie.genres || "Genre not listed";
-      option.append(name, genre);
-      option.addEventListener("click", async () => {
-        selectedSeed = movie;
-        list.querySelectorAll(".seed-option").forEach((item) => item.classList.remove("selected"));
-        option.classList.add("selected");
-        results.innerHTML = '<div class="loading-state">Finding films with a similar feel…</div>';
-        try { renderMovies(results, await request(`/recommendations/similar/${movie.movie_id}?limit=8`)); }
-        catch (error) { showError(results, error.message); }
-      });
-      list.append(option);
-    });
-    if (!movies.length) showError(list, "No matching titles yet.");
-  } catch (error) { showError(list, error.message); }
+    const movies = await searchMovies(query);
+    if (showSuggestions) {
+      suggestions.replaceChildren();
+      movies.slice(0, 7).forEach((movie) => suggestions.append(makeSuggestion(movie)));
+      suggestions.hidden = movies.length === 0;
+    } else {
+      suggestions.hidden = true;
+      showExplore(movies, query);
+    }
+  } catch (error) {
+    suggestions.hidden = true;
+    showEmpty($("#explore-results"), "Search is unavailable.", error.message, true);
+    $("#search-caption").textContent = "Could not search right now";
+  }
 }
 
-function activatePage(page) {
-  document.querySelectorAll(".nav-tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.page === page));
-  document.querySelectorAll(".page").forEach((section) => section.classList.toggle("active", section.id === `page-${page}`));
-  if (page === "for-you") loadPicks();
+async function openMovie(movie) {
+  activeMovie = movie;
+  const dialog = $("#movie-dialog");
+  $("#dialog-title").textContent = movie.title;
+  $("#dialog-year").textContent = getYear(movie.title) ? "Released " + getYear(movie.title) : "MovieLens catalog record";
+  const genres = $("#dialog-genres");
+  genres.replaceChildren();
+  getGenres(movie).forEach((name) => {
+    const tag = document.createElement("span");
+    tag.className = "genre-tag";
+    tag.textContent = name;
+    genres.append(tag);
+  });
+  $("#dialog-poster").style.setProperty("--poster-color", PALETTE[hashTitle(movie.title) % PALETTE.length]);
+  $("#dialog-similar-results").replaceChildren();
+  $("#dialog-similar-results").innerHTML = '<div class="loading-state">Finding films with a similar feel…</div>';
+  updateDialogWatchlistButton();
+  dialog.showModal();
+  try {
+    const related = await request("/recommendations/similar/" + Number(movie.movie_id) + "?limit=5");
+    renderMovies($("#dialog-similar-results"), related, "No similar titles found.", "Try another film from the collection.");
+  } catch (error) {
+    showEmpty($("#dialog-similar-results"), "Similar films aren’t available.", error.message, true);
+  }
 }
 
-function createAnonymousProfileId() {
-  const words = new Uint32Array(2);
-  crypto.getRandomValues(words);
-  const safeIntegerLimit = 9_007_199_254_740_991n;
-  const generated = ((BigInt(words[0]) << 32n) | BigInt(words[1])) % safeIntegerLimit;
-  return String(generated || 1n);
+function updateDialogWatchlistButton() {
+  if (!activeMovie) return;
+  const saved = isSaved(activeMovie.movie_id);
+  $("#dialog-watchlist").textContent = saved ? "✓ Saved to watchlist" : "＋ Add to watchlist";
 }
 
-profileInput.value = localStorage.getItem("cinematch.profileId") || createAnonymousProfileId();
-profileId();
-profileInput.addEventListener("change", () => {
-  profileId();
-  if ($("#page-for-you").classList.contains("active")) loadPicks();
+function renderWatchlist() {
+  const list = getWatchlist();
+  const filter = $("#watchlist-filter").value;
+  const sort = $("#watchlist-sort").value;
+  const filtered = list.filter((movie) => !filter || getGenres(movie).includes(filter));
+  if (sort === "title") filtered.sort((a, b) => a.title.localeCompare(b.title));
+  else if (sort === "year") filtered.sort((a, b) => (Number(getYear(b.title)) || 0) - (Number(getYear(a.title)) || 0));
+  else filtered.sort((a, b) => Number(b.saved_at || 0) - Number(a.saved_at || 0));
+  $("#watchlist-summary").textContent = list.length + (list.length === 1 ? " saved film" : " saved films");
+  const filters = Array.from(new Set(list.flatMap(getGenres))).sort((a, b) => a.localeCompare(b));
+  const select = $("#watchlist-filter");
+  const selected = select.value;
+  select.replaceChildren();
+  const all = document.createElement("option");
+  all.value = "";
+  all.textContent = "All genres";
+  select.append(all);
+  filters.forEach((genre) => {
+    const option = document.createElement("option");
+    option.value = genre;
+    option.textContent = genre;
+    select.append(option);
+  });
+  select.value = filters.includes(selected) ? selected : "";
+  const container = $("#watchlist-results");
+  if (!filtered.length) {
+    const message = list.length
+      ? "No saved films match this genre."
+      : "Save a film from Explore or your recommendations and it will be waiting here.";
+    showEmpty(container, list.length ? "A quieter shelf." : "Your watchlist is ready.", message);
+    return;
+  }
+  renderMovies(container, filtered, "Your watchlist is empty.", "Save a film to keep it close.");
+}
+
+function showPage(page) {
+  $$(".page").forEach((section) => section.classList.toggle("active", section.id === "page-" + page));
+  $$(".nav-link").forEach((link) => link.classList.toggle("active", link.dataset.pageLink === page));
+  $("#primary-nav").classList.remove("open");
+  $("#mobile-menu").setAttribute("aria-expanded", "false");
+  $("#mobile-backdrop").classList.remove("open");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  if (page === "home") loadHomePicks();
+  if (page === "recommendations") loadRecommendations();
+  if (page === "watchlist") renderWatchlist();
+  if (page === "explore") setTimeout(() => $("#movie-search").focus({ preventScroll: true }), 80);
+}
+
+function openProfileDialog() {
+  $("#profile-id-input").value = String(profileId);
+  $("#profile-dialog").showModal();
+}
+
+$$("[data-page-link]").forEach((control) => {
+  control.addEventListener("click", (event) => {
+    event.preventDefault();
+    showPage(control.dataset.pageLink);
+  });
 });
-$("#profile-minus").addEventListener("click", () => { profileInput.value = String(Math.max(1, profileId() - 1)); profileInput.dispatchEvent(new Event("change")); });
-$("#profile-plus").addEventListener("click", () => { profileInput.value = String(profileId() + 1); profileInput.dispatchEvent(new Event("change")); });
-document.querySelectorAll(".nav-tab").forEach((tab) => tab.addEventListener("click", () => activatePage(tab.dataset.page)));
-$("#movie-search").addEventListener("input", () => { clearTimeout(seedDebounce); seedDebounce = setTimeout(discover, 250); });
-$("#movie-search").addEventListener("keydown", (event) => { if (event.key === "Enter") discover(); });
-$("#similar-search").addEventListener("input", () => { clearTimeout(seedDebounce); seedDebounce = setTimeout(searchSeeds, 250); });
-$("#refresh-picks").addEventListener("click", loadPicks);
+
+$("#movie-search").addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => runSearch(true), 220);
+});
+$("#movie-search").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    runSearch(false);
+  } else if (event.key === "Escape") {
+    $("#search-suggestions").hidden = true;
+  }
+});
+document.addEventListener("click", (event) => {
+  if (!event.target.closest(".search-panel")) $("#search-suggestions").hidden = true;
+});
+$("#refresh-picks").addEventListener("click", loadRecommendations);
+$("#watchlist-filter").addEventListener("change", renderWatchlist);
+$("#watchlist-sort").addEventListener("change", renderWatchlist);
+$("#profile-button").addEventListener("click", openProfileDialog);
+$("#profile-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const nextId = Number($("#profile-id-input").value);
+  if (!Number.isSafeInteger(nextId) || nextId <= 0) {
+    showToast("Enter a positive whole-number profile ID.", true);
+    return;
+  }
+  profileId = nextId;
+  localStorage.setItem(PROFILE_KEY, String(profileId));
+  $("#profile-dialog").close();
+  if ($("#page-home").classList.contains("active")) loadHomePicks();
+  if ($("#page-recommendations").classList.contains("active")) loadRecommendations();
+  showToast("Profile updated.");
+});
+$("[data-close-profile]").addEventListener("click", () => $("#profile-dialog").close());
+$("#movie-dialog .dialog-close").addEventListener("click", () => $("#movie-dialog").close());
+$("#dialog-watchlist").addEventListener("click", () => {
+  if (activeMovie) toggleWatchlist(activeMovie);
+  updateDialogWatchlistButton();
+});
+$("#dialog-similar").addEventListener("click", () => {
+  $("#movie-dialog").close();
+  showPage("explore");
+  $("#movie-search").value = activeMovie ? activeMovie.title : "";
+  runSearch(false);
+});
+$("#mobile-menu").addEventListener("click", () => {
+  const isOpen = $("#mobile-menu").getAttribute("aria-expanded") === "true";
+  $("#mobile-menu").setAttribute("aria-expanded", String(!isOpen));
+  $("#primary-nav").classList.toggle("open", !isOpen);
+  $("#mobile-backdrop").classList.toggle("open", !isOpen);
+});
+$("#mobile-backdrop").addEventListener("click", () => {
+  $("#primary-nav").classList.remove("open");
+  $("#mobile-menu").setAttribute("aria-expanded", "false");
+  $("#mobile-backdrop").classList.remove("open");
+});
+$("#movie-dialog").addEventListener("click", (event) => {
+  if (event.target === $("#movie-dialog")) $("#movie-dialog").close();
+});
+
+const nav = $(".primary-nav");
+nav.id = "primary-nav";
+$("#profile-label").textContent = String(profileId);
+updateWatchlistCount();
 checkHealth();
+loadHomePicks();

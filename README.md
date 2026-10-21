@@ -207,10 +207,18 @@ needed for CI.
 
 ## Deploy to Vercel
 
-The Vercel deployment uses a static browser frontend in `frontend/web/` and the
-existing FastAPI backend as a Python service. Vercel builds the MovieLens demo
-data and models from the public GroupLens archive; generated files remain out
-of Git. The API uses a hosted PostgreSQL database for ratings.
+The Vercel deployment uses the cinematic static browser frontend in
+`frontend/web/` and the existing FastAPI backend as a Python service. It
+includes title search with suggestions, profile-based recommendations, similar
+film discovery, half-star ratings and a browser-local watchlist. Watchlist
+entries stay in the current browser; ratings are stored by the hosted API in
+PostgreSQL. Vercel builds the MovieLens demo data and models from the public
+GroupLens archive; generated files remain out of Git.
+
+Movie cards use original CSS artwork as a fallback. MovieLens supplies titles,
+genres, ratings and tags, but this project does not currently provide licensed
+poster URLs, plot summaries, cast or trailer links, so the UI does not invent
+those details.
 
 `vercel.json` defines the two services and sends `/api/*` requests to FastAPI.
 Before deploying, connect a PostgreSQL database and set its `DATABASE_URL` as a

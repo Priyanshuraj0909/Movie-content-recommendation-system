@@ -3,67 +3,115 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#131318" />
-    <meta name="description" content="Find your next favorite story with CineMatch." />
-    <title>CineMatch — your personal cinema guide</title>
+    <meta name="theme-color" content="#08090d" />
+    <meta name="description" content="CineMatch AI finds films that feel made for you." />
+    <title>CineMatch AI — Find your next favorite</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/styles.css" />
     <script src="/app.js" defer></script>
   </head>
   <body>
-    <div class="app-shell">
-      <aside class="sidebar">
-        <a class="brand" href="/" aria-label="CineMatch home"><span class="brand-icon">▰</span><span>CineMatch</span></a>
-        <p class="tagline">A little more you in every recommendation.</p>
+    <header class="topbar">
+      <a class="brand" href="#home" data-page-link="home" aria-label="CineMatch AI home">
+        <span class="brand-symbol" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M5 9.5 24.5 4l3 10.5L8 20z"/><path d="m8 20 18.5-5.5 2.5 9L10.5 29z"/><circle cx="11" cy="12" r="1.2"/><circle cx="19" cy="9.8" r="1.2"/><circle cx="14" cy="23" r="1.2"/><circle cx="22" cy="20.6" r="1.2"/></svg></span>
+        <span class="brand-name">CineMatch<span>AI</span></span>
+      </a>
 
-        <label class="field-label" for="profile-id">Your profile</label>
-        <div class="profile-control">
-          <input id="profile-id" type="number" min="1" value="1001" aria-label="Your profile ID" />
-          <button id="profile-minus" class="stepper" type="button" aria-label="Decrease profile ID">−</button>
-          <button id="profile-plus" class="stepper" type="button" aria-label="Increase profile ID">+</button>
+      <nav class="primary-nav" aria-label="Main navigation">
+        <button class="nav-link active" type="button" data-page-link="home">Home</button>
+        <button class="nav-link" type="button" data-page-link="explore">Explore</button>
+        <button class="nav-link" type="button" data-page-link="recommendations">AI picks</button>
+        <button class="nav-link" type="button" data-page-link="watchlist">Watchlist <span id="watchlist-count" class="nav-count">0</span></button>
+      </nav>
+
+      <div class="topbar-actions">
+        <div class="connection" id="connection" aria-live="polite"><span class="connection-dot"></span><span>Connecting</span></div>
+        <button id="profile-button" class="profile-button" type="button" aria-label="Change your profile">
+          <span class="profile-avatar" aria-hidden="true">C</span><span class="profile-caption">Your profile</span><span class="profile-chevron" aria-hidden="true">⌄</span>
+        </button>
+      </div>
+      <button id="mobile-menu" class="mobile-menu" type="button" aria-label="Open navigation" aria-expanded="false"><span></span><span></span></button>
+    </header>
+
+    <main>
+      <section id="page-home" class="page active" aria-labelledby="hero-title">
+        <div class="hero">
+          <div class="hero-backdrop" aria-hidden="true">
+            <div class="hero-light"></div><div class="hero-orb"></div><div class="hero-ridge ridge-one"></div><div class="hero-ridge ridge-two"></div><div class="hero-ridge ridge-three"></div>
+            <div class="film-grain"></div>
+          </div>
+          <div class="hero-copy">
+            <div class="eyebrow"><span class="eyebrow-line"></span>YOUR NEXT FAVORITE IS OUT THERE</div>
+            <h1 id="hero-title">Find the film<br />that <em>feels like you.</em></h1>
+            <p>Thousands of stories. One that stays with you. Let your taste lead the way.</p>
+            <div class="hero-actions">
+              <button class="button button-primary" type="button" data-page-link="recommendations"><span class="button-play" aria-hidden="true">✦</span>Find my next film</button>
+              <button class="button button-quiet" type="button" data-page-link="explore"><span class="button-search" aria-hidden="true">⌕</span>Explore movies</button>
+            </div>
+            <div class="hero-proof"><span class="proof-avatars" aria-hidden="true"><i>✦</i><i>◈</i><i>✧</i></span><span>Personalized from what <strong>you</strong> love</span></div>
+          </div>
+          <div class="hero-side-note"><span>THE ART OF YOUR NEXT WATCH</span><i></i><span>01 — 09,742</span></div>
+          <div class="hero-bottom"><span id="catalog-count">A collection of stories, waiting to be found</span><span class="hero-scroll">SCROLL TO DISCOVER <b>↓</b></span></div>
         </div>
 
-        <nav class="nav-tabs" aria-label="Explore">
-          <button class="nav-tab active" data-page="discover"><span class="nav-dot"></span>Discover</button>
-          <button class="nav-tab" data-page="for-you"><span class="nav-dot"></span>For you</button>
-          <button class="nav-tab" data-page="similar"><span class="nav-dot"></span>Similar films</button>
-        </nav>
-
-        <div id="connection" class="connection pending"><span class="status-dot"></span><span>Connecting to your cinema…</span></div>
-        <div class="sidebar-foot"><span class="foot-mark">✳</span><p>Your ratings are saved to your profile and help shape your next picks.</p></div>
-      </aside>
-
-      <main class="main-content">
-        <section class="hero">
-          <div class="eyebrow"><span></span>Your personal cinema guide</div>
-          <h1>Find your next<br />favorite story.</h1>
-          <p>Search the collection, tell us what you love, and discover films that feel like they were picked just for you.</p>
-          <div class="hero-decoration" aria-hidden="true"><span>✳</span><span>✴</span><span>✳</span></div>
+        <section class="content-section home-recommendations" aria-labelledby="home-picks-title">
+          <div class="section-heading">
+            <div><p class="section-kicker"><span class="sparkle">✳</span> CURATED FOR YOUR PROFILE</p><h2 id="home-picks-title">A few good stories</h2><p class="section-subtitle">Recommendations from your profile and the CineMatch collection.</p></div>
+            <button class="text-action" type="button" data-page-link="recommendations">See all picks <span aria-hidden="true">↗</span></button>
+          </div>
+          <div id="home-picks" class="poster-row" aria-live="polite"><div class="skeleton-row"><span></span><span></span><span></span><span></span><span></span></div></div>
         </section>
 
-        <section id="page-discover" class="page active" aria-labelledby="discover-title">
-          <div class="section-heading"><div><p class="section-kicker">THE COLLECTION</p><h2 id="discover-title">Explore the collection</h2></div><span class="section-count">MOVIE NIGHT STARTS HERE</span></div>
-          <label class="search-label" for="movie-search">Search by movie title</label>
-          <div class="search-wrap"><span class="search-icon" aria-hidden="true">⌕</span><input id="movie-search" type="search" placeholder="Try a title like The Matrix…" autocomplete="off" /><kbd>↵</kbd></div>
-          <div id="discover-results" class="results" aria-live="polite"><div class="empty-state"><span class="empty-icon">⌕</span><p>Search for a film, then rate it to shape your personal picks.</p></div></div>
+        <section class="discovery-banner">
+          <div class="banner-copy"><p class="section-kicker">A LITTLE MORE YOU IN EVERY RECOMMENDATION</p><h2>Start with a film<br />you already love.</h2><p>We’ll find its cinematic cousins using the stories, genres, and tags in our collection.</p><button class="button button-outline" type="button" data-page-link="explore">Find something similar <span aria-hidden="true">→</span></button></div>
+          <div class="banner-art" aria-hidden="true"><div class="art-ring ring-a"></div><div class="art-ring ring-b"></div><div class="art-disc"></div><span class="art-star star-a">✳</span><span class="art-star star-b">✦</span></div>
         </section>
+      </section>
 
-        <section id="page-for-you" class="page" aria-labelledby="for-you-title">
-          <div class="section-heading"><div><p class="section-kicker">CURATED FOR PROFILE <span id="profile-label">—</span></p><h2 id="for-you-title">Picked for your profile</h2></div><button id="refresh-picks" class="subtle-button" type="button">↻ Refresh</button></div>
-          <p class="section-description">Your ratings help us find stories that match your taste.</p>
-          <div id="personal-results" class="results" aria-live="polite"><div class="loading-state">Finding a few good stories…</div></div>
-        </section>
+      <section id="page-explore" class="page content-page" aria-labelledby="explore-title">
+        <div class="page-intro"><p class="section-kicker">THE CATALOG</p><h1 id="explore-title">Explore the collection</h1><p>Search real movie records and follow a story wherever it takes you.</p></div>
+        <div class="search-panel">
+          <label class="sr-only" for="movie-search">Search movies by title</label>
+          <span class="search-symbol" aria-hidden="true">⌕</span>
+          <input id="movie-search" type="search" placeholder="Search by movie title…" autocomplete="off" />
+          <kbd>ENTER</kbd>
+          <div id="search-suggestions" class="suggestions" hidden></div>
+        </div>
+        <div id="genre-filters" class="filter-row" aria-label="Filter current search results by genre"></div>
+        <div class="results-heading"><div><span class="live-mark"></span><span id="search-caption">Ready when you are</span></div><span class="catalog-source">MOVIELENS COLLECTION</span></div>
+        <div id="explore-results" class="poster-grid" aria-live="polite"><div class="empty-panel"><span class="empty-symbol">⌕</span><h2>Every great watch starts somewhere.</h2><p>Search a title to discover films from the catalog.</p></div></div>
+      </section>
 
-        <section id="page-similar" class="page" aria-labelledby="similar-title">
-          <div class="section-heading"><div><p class="section-kicker">FOLLOW A FEELING</p><h2 id="similar-title">More like a favorite</h2></div></div>
-          <p class="section-description">Choose a movie you already love and we’ll find its cinematic cousins.</p>
-          <label class="search-label" for="similar-search">Find a movie to start with</label>
-          <div class="search-wrap"><span class="search-icon" aria-hidden="true">⌕</span><input id="similar-search" type="search" placeholder="Search for a movie…" autocomplete="off" /></div>
-          <div id="similar-seeds" class="seed-list" aria-live="polite"></div>
-          <div id="similar-results" class="results" aria-live="polite"></div>
-        </section>
-        <footer class="page-footer"><span>MADE FOR MOVIE LOVERS</span><span>✳ &nbsp; CineMatch</span></footer>
-      </main>
-    </div>
+      <section id="page-recommendations" class="page content-page" aria-labelledby="recommendations-title">
+        <div class="page-intro recommendation-intro"><p class="section-kicker"><span class="sparkle">✳</span> MADE FOR YOUR TASTE</p><h1 id="recommendations-title">Your next favorite,<br /><em>waiting to happen.</em></h1><p>Your saved ratings help shape these picks. Save a few favorites and come back to see your profile take shape.</p><div class="recommendation-profile"><span class="profile-avatar">C</span><span>PROFILE <strong id="profile-label">—</strong></span><button id="refresh-picks" class="icon-button" type="button" aria-label="Refresh recommendations">↻</button></div></div>
+        <div id="personal-results" class="poster-grid recommendation-grid" aria-live="polite"><div class="skeleton-grid"><span></span><span></span><span></span><span></span></div></div>
+      </section>
+
+      <section id="page-watchlist" class="page content-page" aria-labelledby="watchlist-title">
+        <div class="page-intro"><p class="section-kicker">YOUR PERSONAL COLLECTION</p><h1 id="watchlist-title">Saved for movie night.</h1><p>Keep the stories you want to come back to, all in one place.</p></div>
+        <div class="watchlist-toolbar"><span id="watchlist-summary">0 saved films</span><div class="watchlist-controls"><label for="watchlist-filter">Genre</label><select id="watchlist-filter"><option value="">All genres</option></select><label for="watchlist-sort">Sort</label><select id="watchlist-sort"><option value="added">Recently saved</option><option value="title">Title A–Z</option><option value="year">Release year</option></select></div></div>
+        <p class="device-note"><span aria-hidden="true">◉</span> Your watchlist is saved on this device.</p>
+        <div id="watchlist-results" class="poster-grid" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <footer class="site-footer"><a class="brand footer-brand" href="#home" data-page-link="home"><span class="brand-symbol" aria-hidden="true">✳</span><span class="brand-name">CineMatch<span>AI</span></span></a><span>Stories found together.</span><span class="footer-catalog">MOVIELENS · CONTENT-BASED + COLLABORATIVE RECOMMENDATIONS</span></footer>
+
+    <dialog id="profile-dialog" class="profile-dialog" aria-labelledby="profile-dialog-title">
+      <button class="dialog-close" type="button" data-close-profile aria-label="Close profile settings">×</button>
+      <p class="section-kicker">CINEMATCH PROFILE</p><h2 id="profile-dialog-title">Your local profile</h2>
+      <p>Ratings and recommendations use this profile ID. It is saved in this browser.</p>
+      <form id="profile-form"><label for="profile-id-input">Profile ID</label><input id="profile-id-input" type="number" min="1" max="9007199254740991" required /><button class="button button-primary" type="submit">Use this profile</button></form>
+    </dialog>
+
+    <dialog id="movie-dialog" class="movie-dialog" aria-labelledby="dialog-title">
+      <button class="dialog-close" type="button" aria-label="Close movie details">×</button>
+      <div id="dialog-poster" class="dialog-poster"></div>
+      <div class="dialog-content"><p class="section-kicker">FROM THE CINEMATCH COLLECTION</p><h2 id="dialog-title"></h2><p id="dialog-year" class="dialog-year"></p><div id="dialog-genres" class="genre-tags"></div><p class="catalog-note">This catalog entry includes its title and genres. A synopsis, cast, and trailer aren’t available in the current dataset.</p><div class="dialog-actions"><button id="dialog-watchlist" class="button button-primary" type="button">＋ Add to watchlist</button><button id="dialog-similar" class="button button-quiet" type="button">Find similar films</button></div><div class="dialog-similar"><h3>Films with a similar feel</h3><div id="dialog-similar-results" class="poster-row compact-row"></div></div></div>
+    </dialog>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <div id="mobile-backdrop" class="mobile-backdrop"></div>
   </body>
 </html>
