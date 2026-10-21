@@ -1,347 +1,321 @@
-# Movie Recommendation System
+<div align="center">
 
-A local-first, phase-driven project for building and evaluating content-based,
-collaborative, and hybrid movie recommendations. It is designed to run on Apple
-Silicon and uses MovieLens latest-small as the initial dataset. MovieLens genres
-and tags are treated as metadata, not plot descriptions.
+# 🎬 CineMatch AI
 
-## Live app
+### Discover the next movie that feels like *your* kind of story.
 
-Open the deployed CineMatch AI web app at **<https://cinematch-king-09.vercel.app>**.
-The Vercel deployment serves the browser UI and the FastAPI endpoints under the
-same domain. The deployed backend health check is available at
-<https://cinematch-king-09.vercel.app/api/health> and reports the loaded movie
-count.
+An explainable movie discovery and recommendation system combining content similarity, collaborative filtering, and a validation-tuned hybrid ranker — wrapped in a cinematic dark interface.
 
-The browser app includes Home, Movie search, AI picks, and Watchlist views. The
-Movie search tab is in the top navigation; AI picks also has a Search movies
-button. Search for a title such as `Matrix`; select a result to see its catalog
-details or discover similar films. Movie cards let you save a half-star rating
-for the current profile. Ratings go to the API and hosted PostgreSQL database.
-The watchlist and profile ID are stored in the current browser, so they do not
-sync across browsers or devices. There is no account login in this MVP.
+[![Python 3.11–3.12](https://img.shields.io/badge/Python-3.11%E2%80%933.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![CI](https://github.com/Priyanshuraj0909/Movie-content-recommendation-system/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Priyanshuraj0909/Movie-content-recommendation-system/actions/workflows/ci.yml)
+[![Deployed on Vercel](https://img.shields.io/badge/Live-Vercel-black?logo=vercel)](https://cinematch-king-09.vercel.app)
 
-The MovieLens catalog provides titles, genres, ratings, tags, and IDs. CineMatch
-uses original CSS artwork; it does not currently include licensed posters, plot
-summaries, cast lists, or trailers.
+<br />
 
-Where credentials are configured, the web catalog also shows read-only public
-IMDb and TMDB community ratings. CineMatch does not collect public-site ratings
-or reviews from its visitors.
+[Open CineMatch](https://cinematch-king-09.vercel.app) · [API docs](https://cinematch-king-09.vercel.app/api/docs) · [Architecture](docs/ARCHITECTURE.md) · [Model card](docs/MODEL_CARD.md)
 
-## Requirements
+</div>
 
-- macOS on Apple Silicon or another supported platform
-- Python 3.11 or 3.12 (ARM64 on Apple Silicon)
-- Git
+---
 
-Check the interpreter before creating the environment:
+## Project at a glance
 
-```bash
-python3 --version
-python3 -c 'import platform; print(platform.machine())'
+CineMatch AI is a portfolio-ready movie recommendation project built around a reproducible MovieLens pipeline. It includes a responsive browser app deployed on Vercel, a local Streamlit interface, a typed FastAPI backend, offline ranking evaluation, and optional read-only public movie ratings from TMDB and OMDb.
+
+| | Status |
+|---|---|
+| Production web app | [cinematch-king-09.vercel.app](https://cinematch-king-09.vercel.app) |
+| Production API health | [9,742 movies loaded](https://cinematch-king-09.vercel.app/api/health) |
+| Dataset snapshot | 9,742 movies · 100,836 ratings · 610 users |
+| Recommendation methods | TF-IDF content similarity · regularized biases · matrix factorization · hybrid ranking |
+| External ratings | TMDB and OMDb service implemented; provider credentials are not currently configured in Vercel, so public numeric scores are unavailable there |
+| Project status | Deployed; production write verification for locally submitted profile ratings is still pending |
+
+> MovieLens provides titles, genres, user tags, and community interactions. This project does not treat those tags as plot summaries and does not invent posters, cast, trailers, or ratings.
+
+## What you can do
+
+- Search the MovieLens catalog by title and explore genre-filtered results.
+- Find similar movies using title, genre, and aggregated user-tag text.
+- Save a half-star rating to a local profile and get personalized recommendations.
+- Use the popularity fallback for a profile with no positive saved ratings.
+- Keep a browser-local watchlist in the deployed web app.
+- See optional IMDb and TMDB community ratings, vote counts, and source links when the server has provider credentials and a valid movie match.
+- Run the same FastAPI recommendation API with either the local Streamlit UI or the deployed browser UI.
+
+### Interfaces
+
+| Interface | How to open it | Notes |
+|---|---|---|
+| Deployed web app | [Open CineMatch](https://cinematch-king-09.vercel.app) | Responsive HTML/CSS/JavaScript frontend with same-origin `/api` requests |
+| Local Streamlit app | `streamlit run frontend/app.py` | Run beside the local FastAPI server; includes Discover, For you, and Similar films views |
+| FastAPI docs | `http://127.0.0.1:8000/api/docs` | Interactive local API documentation |
+
+## Recommendation system
+
+### Content-based similarity
+
+The content model builds TF-IDF features from each movie's title, genres, and aggregated MovieLens tags. It ranks candidates using cosine similarity, omits the seed and excluded movies, drops zero-similarity results, and uses movie ID to break ties deterministically.
+
+### Collaborative filtering
+
+The collaborative model includes a regularized global/user/item bias baseline and seeded stochastic-gradient matrix factorization with 32 latent factors. It predicts explicit MovieLens ratings and provides a shrinkage-adjusted popularity fallback for cold-start profiles. The model is fitted using the training split only.
+
+### Hybrid recommendations
+
+The evaluation script compares popularity, content-profile, collaborative, and blended rankings on a shared candidate set. It selects the collaborative blend weight on validation NDCG@10, then evaluates that choice once on the held-out test split. In the recorded run, the selected blend was 0.25 content + 0.75 collaborative.
+
+For interactive profiles, positive locally saved ratings seed a content profile and combine with collaborative predictions. Profiles without positive saved ratings receive popularity recommendations. Saved ratings and the browser watchlist are separate from the MovieLens training data; new visitor ratings do not retrain the collaborative model.
+
+## Dataset and evaluation
+
+The project downloads [GroupLens MovieLens latest-small](https://grouplens.org/datasets/movielens/latest/) and verifies the archive checksum before extraction. Preprocessing checks CSV schemas, IDs, duplicates, rating ranges, timestamps, and movie references. It also uses MovieLens `links.csv` to map movie records to TMDB and IMDb identifiers.
+
+The recorded snapshot contains 9,742 movies, 100,836 ratings from 610 users, and 3,683 tag applications. Ratings are split chronologically per user:
+
+| Partition | Interactions |
+|---|---:|
+| Train | 81,200 |
+| Validation | 9,818 |
+| Test | 9,818 |
+
+Users with fewer than three interactions remain entirely in training. The ranking protocol considers movies with at least one training rating, removes each user's training history, and marks held-out ratings of 4.0 or higher as relevant. The test results below are for the recorded MovieLens snapshot and are not a general performance guarantee.
+
+### Held-out ranking results
+
+Recorded test results at K=10, over 557 eligible users and an 8,255-movie training candidate catalog:
+
+| Ranker | Precision@10 | Recall@10 | NDCG@10 |
+|---|---:|---:|---:|
+| Popularity | — | — | 0.0317 |
+| Content profile | — | — | 0.0112 |
+| Collaborative | — | — | 0.0326 |
+| **Hybrid (0.25 content / 0.75 collaborative)** | **0.0264** | **0.0435** | **0.0381** |
+
+For the selected hybrid, catalog coverage was 0.0492 and novelty was 9.9970. The complete protocol and report are generated locally at `artifacts/ranking_metrics.json`; that generated artifact is excluded from Git. See the [model card](docs/MODEL_CARD.md) for limitations and interpretation.
+
+### Rating prediction metrics
+
+On the validation partition of 9,818 ratings, the recorded bias baseline achieved RMSE 0.8914 / MAE 0.6854, and matrix factorization achieved RMSE 0.8808 / MAE 0.6742. These are rating-prediction errors, not top-K recommendation accuracy.
+
+### Local performance snapshot
+
+One local run on Python 3.12.7 / Apple Silicon ARM64 measured warm, in-process operations:
+
+| Operation | Median | p95 |
+|---|---:|---:|
+| Search 9,742 titles | 1.145 ms | 1.219 ms |
+| Similar movies, top 10 | 0.707 ms | 0.867 ms |
+| Predict 1,000 user/movie pairs | 0.253 ms | 0.273 ms |
+| Rank full candidate catalog, top 10 | 2.576 ms | 2.876 ms |
+
+These measurements exclude network transport, cold starts, concurrent traffic, and hosted infrastructure. They are observations, not production latency guarantees. Details are in [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
+
+## IMDb and TMDB public ratings
+
+The feature is read-only and keeps provider credentials on the server:
+
+- TMDB provides `vote_average`, `vote_count`, and an IMDb ID when available.
+- OMDb provides IMDb `imdbRating` and `imdbVotes`.
+- MovieLens stable IDs are used first. When a provider ID is missing, title-and-year matching is verified before data is returned.
+- Scores remain on the providers' original 10-point scale. Missing or invalid values are omitted; they are never fabricated.
+- Requests use bounded timeouts and a bounded, 12-hour process-local cache. The cache is per warm server process and is not shared across Vercel instances.
+- The web app includes TMDB attribution and its non-endorsement notice.
+
+**Current deployment limitation:** `TMDB_API_READ_ACCESS_TOKEN` and `OMDB_API_KEY` have not been added to the Vercel project. The endpoint and UI are deployed, but production numeric community ratings will remain unavailable until the provider keys are set as server-side Vercel environment variables and the project is redeployed. The local Streamlit interface does not currently display the external ratings.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    ML[MovieLens CSVs] --> PREP[Validate and split]
+    PREP --> C[TF-IDF content model]
+    PREP --> CF[Bias + matrix factorization]
+    C --> E[Validation tuning + test evaluation]
+    CF --> E
+    U[Streamlit or web UI] --> API[FastAPI]
+    API --> C
+    API --> CF
+    API --> DB[(SQLite local / PostgreSQL hosted)]
+    API --> EXT[TMDB + OMDb, optional]
+    PREP --> META[Movie catalog + links]
+    META --> API
 ```
 
-## Setup
+The training/evaluation pipeline is separate from serving. At runtime, the API reads prepared metadata and fitted model artifacts. It does not load the validation or test files to generate recommendations.
+
+## Tech stack
+
+- **Data and ML:** Python, pandas, NumPy, SciPy sparse matrices, scikit-learn TF-IDF, seeded NumPy matrix factorization
+- **API and persistence:** FastAPI, Pydantic, SQLAlchemy, SQLite locally, PostgreSQL through `DATABASE_URL` when hosted
+- **Interfaces:** Streamlit locally; responsive HTML, CSS, and vanilla JavaScript on Vercel
+- **External ratings:** TMDB API and OMDb API through a server-side Python service
+- **Quality and delivery:** pytest, Ruff, GitHub Actions, Vercel Services, optional Docker Compose
+
+## Quick start
+
+### Requirements
+
+- Python 3.11 or 3.12
+- Git
+- Internet access for the one-time MovieLens download
+
+On Apple Silicon, use the native ARM64 Python build where possible.
+
+### Install and prepare the demo
+
+From the repository root:
 
 ```bash
+git clone https://github.com/Priyanshuraj0909/Movie-content-recommendation-system.git
+cd Movie-content-recommendation-system
+
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements-dev.txt
 python -m pip install -e .
-```
-
-After installation, the one-time demo setup downloads and checksum-validates
-MovieLens latest-small, prepares its chronological splits, trains both models,
-and writes the ranking report:
-
-```bash
 bash scripts/setup_demo.sh
 ```
 
-This step needs internet access to fetch the public GroupLens archive. Generated
-datasets, model artifacts and local ratings stay on disk and are ignored by
-Git. To omit the offline ranking report, run
-`bash scripts/setup_demo.sh --skip-evaluation`.
+`setup_demo.sh` downloads and validates the dataset, creates processed files and chronological splits, trains both models, and writes the offline ranking report. Generated datasets and artifacts are local and ignored by Git. To skip the ranking report, run `bash scripts/setup_demo.sh --skip-evaluation`.
 
-## Run
+### Start the API and local UI
 
-```bash
-python -m recommender
-```
-
-The command prints the configured local data and artifact paths. It does not
-download data or create model files.
-
-## Download and prepare MovieLens
-
-```bash
-python -m recommender.data.movielens download
-python -m recommender.data.movielens prepare
-```
-
-The downloader uses the official [GroupLens MovieLens latest-small archive](https://files.grouplens.org/datasets/movielens/ml-latest-small.zip)
-and verifies its companion [MD5 checksum](https://files.grouplens.org/datasets/movielens/ml-latest-small.zip.md5)
-before writing the CSV files to `data/raw/`. It refuses to overwrite existing
-CSV files. Preparation validates the schemas, IDs, required values, rating
-scale, timestamps and movie references, then writes `movies_with_tags.csv`,
-`links.csv`, per-user chronological rating splits, and `dataset_manifest.json`
-to `data/processed/`. A small `download_metadata.json` sidecar records the
-verified archive checksum so the processed manifest can preserve provenance.
-
-The validation and test rows are the newest interactions per user; timestamp
-ties are ordered by `movieId`. Users with fewer than three ratings stay entirely
-in training. The manifest records source, checksum (when downloaded through the
-CLI), data counts and timestamp range. `latest-small` is a development dataset
-that GroupLens may update; its license restricts commercial use without prior
-permission. Raw and processed dataset files are excluded from Git.
-
-## Train the content model
-
-After preparing the dataset, fit and save the TF-IDF model:
-
-```bash
-python -m recommender.models.content
-```
-
-This reads `data/processed/movies_with_tags.csv` and writes
-`artifacts/content_recommender.joblib`. To query it from Python:
-
-```python
-from recommender.models.content import ContentRecommender
-
-model = ContentRecommender.load("artifacts/content_recommender.joblib")
-results = model.similar_movies(movie_id=1, top_k=10, exclude_movie_ids={2, 3})
-```
-
-The model combines title, genres and aggregated tags. Results are ordered by
-cosine similarity with movie ID as a deterministic tie-breaker; the seed and
-excluded watched movies are omitted.
-
-## Train the collaborative model
-
-Fit the regularized bias baseline and seeded matrix factorization on the
-training split, then compare rating predictions on validation data:
-
-```bash
-python -m recommender.models.collaborative
-```
-
-The command saves `artifacts/collaborative_recommender.joblib` and validation
-RMSE/MAE to `artifacts/collaborative_metrics.json`. The model falls back to
-regularized user/item biases for sparse or unknown users and uses a
-shrinkage-adjusted popularity ranking for cold-start recommendation requests.
-Recommendations exclude items present in the training history and any
-additional IDs supplied by the caller.
-
-## Tune and evaluate hybrid rankings
-
-```bash
-python -m recommender.evaluation.ranking
-```
-
-This compares popularity, content-profile, collaborative and hybrid rankings.
-It tunes the collaborative blend weight over `0.00, 0.25, 0.50, 0.75, 1.00`
-using validation NDCG@10 (then Recall@10 and Precision@10 to break ties), and
-evaluates the selected weight on the untouched test split. Relevance means a
-rating of at least 4.0. Every method receives the same candidates: movies with
-at least one training rating, after removing that user's training history.
-Only users with at least one relevant held-out item in this candidate set are
-included. Coverage is the fraction of the training item catalog recommended;
-novelty is mean self-information from training item frequencies.
-
-The protocol and metrics are written to `artifacts/ranking_metrics.json`.
-Dataset splits and model artifacts must be prepared first. Metrics describe
-this MovieLens development dataset and split; they are not a general
-performance guarantee.
-
-## Run the recommendation API
-
-Prepare the data and model files first by running the Phase 2–5 commands above.
-Then start the local API from the project root:
+In terminal one, with the virtual environment active:
 
 ```bash
 uvicorn backend.app.main:app --reload
 ```
 
-The API documentation is available at `http://127.0.0.1:8000/api/docs`. The
-available routes are:
-
-- `GET /api/health` reports service status and the number of loaded movies.
-- `GET /api/movies/search?q=star&limit=20` searches titles without interpreting the
-  query as a regular expression.
-- `GET /api/movies/external-ratings?movie_ids=1&movie_ids=2` returns available
-  public IMDb and TMDB ratings, each on its original 10-point scale, with vote
-  counts and official source links. Requests accept up to 30 MovieLens IDs.
-- `GET /api/recommendations/similar/{movie_id}?limit=10` returns content matches.
-- `GET /api/recommendations/users/{user_id}?limit=10` ranks unseen training-catalog
-  movies from saved positive local ratings and the trained models. Users with
-  no positive saved ratings receive the training-only popularity fallback.
-- `POST /api/ratings` accepts `{"user_id": 7, "movie_id": 1, "rating": 4.5}`.
-  Ratings from 0.5 to 5.0 are accepted in half-star steps; submitting the same
-  user/movie pair updates its saved rating.
-
-The default SQLite database is `artifacts/recommender.db` for local use and is
-ignored by Git. Set `DATABASE_URL` to a PostgreSQL connection string on hosted
-platforms; the app uses SQLAlchemy's Psycopg driver. Never commit the production
-connection string. Unknown movie IDs return 404 and invalid request values
-return 422.
-
-The API loads its prepared movie metadata and models during application startup.
-This keeps importing the application safe for tests and CI on a fresh clone;
-run the setup command above before starting the service.
-
-### IMDb and TMDB community ratings
-
-Ratings are fetched server-side from the official [TMDB API](https://developer.themoviedb.org/docs) and [OMDb API](https://www.omdbapi.com/).
-Set `TMDB_API_READ_ACCESS_TOKEN` and `OMDB_API_KEY` in the server environment
-to enable each provider. These variables are optional; with a missing key, an
-invalid response, timeout, or unavailable score, the affected rating is omitted
-and the rest of CineMatch continues to work. Do not put either key in browser
-JavaScript, a `NEXT_PUBLIC_` variable, or a committed `.env` file. `.env.example`
-contains variable names only. The API caches responses in memory for up to 12
-hours per warm process; this cache is not shared across Vercel instances.
-
-MovieLens `links.csv` IDs are joined to the catalog at backend startup and are
-included in the Vercel API bundle. TMDB lookups use the TMDB ID; OMDb lookups
-use the IMDb ID. Before returning data, the service checks the returned stable
-ID and title, plus the year when the catalog includes one. It never substitutes
-invented or locally submitted scores. The dark web app displays compact source
-badges on movie cards and rating details with vote counts and links in the
-movie-details dialog. Recommendation models and saved profile ratings are
-unchanged.
-
-TMDB attribution is shown in the web-app footer, including its required
-non-endorsement notice. TMDB/IMDb scores may differ because the services have
-their own voter populations and update schedules.
-
-## Run the Streamlit interface
-
-With the API running in one terminal, open a second terminal at the project
-root and start the UI:
+In terminal two, from the repository root:
 
 ```bash
+source .venv/bin/activate
 streamlit run frontend/app.py
 ```
 
-The browser opens the local Streamlit version of CineMatch, a dark, cinema-inspired interface for title search,
-similar-film discovery, half-star ratings and personalized recommendations.
-Use the sidebar to set the API URL and local profile ID. A profile with no
-positive ratings starts with the popularity fallback; saved ratings shape its
-next personalized list. The UI uses the existing API and makes no poster or
-metadata requests to third parties.
+Open the local Streamlit URL printed by the command, usually `http://localhost:8501`. Set its API URL to `http://127.0.0.1:8000` if needed. The API docs are at `http://127.0.0.1:8000/api/docs`.
 
-### UI walkthrough checklist
+### Optional local TMDB / OMDb keys
 
-1. Start the API and Streamlit in separate terminals; check the sidebar reports
-   the movie catalog as connected.
-2. In Discover, search for a known title, save a rating, and confirm the saved
-   message appears.
-3. Open For you and confirm recommendations load for the current profile.
-4. In Similar films, find a title and load its similar movies.
-5. Stop the API, confirm the UI shows a connection message, then restart it and
-   confirm requests work again.
+To enable external public ratings locally, export credentials in the shell that starts the API. Do not place credentials in frontend code or commit them:
 
-## Quality checks
+```bash
+export TMDB_API_READ_ACCESS_TOKEN="your_tmdb_read_access_token"
+export OMDB_API_KEY="your_omdb_api_key"
+uvicorn backend.app.main:app --reload
+```
+
+Either provider can be configured independently. With no keys, the recommendation app remains usable and provider ratings are omitted.
+
+## API reference
+
+Interactive OpenAPI docs: [`/api/docs`](https://cinematch-king-09.vercel.app/api/docs).
+
+| Method | Route | Purpose |
+|---|---|---|
+| `GET` | `/api/health` | Service status and loaded movie count |
+| `GET` | `/api/movies/search?q=matrix&limit=20` | Search catalog titles |
+| `GET` | `/api/movies/external-ratings?movie_ids=1&movie_ids=2` | Batch-fetch available read-only public ratings for up to 30 catalog IDs |
+| `GET` | `/api/recommendations/similar/{movie_id}?limit=10` | Content-based similar movies |
+| `GET` | `/api/recommendations/users/{user_id}?limit=10` | Personalized or cold-start recommendations |
+| `POST` | `/api/ratings` | Save or update a local profile rating |
+
+Example profile rating request:
+
+```json
+{"user_id": 7, "movie_id": 1, "rating": 4.5}
+```
+
+The rating endpoint accepts half-star values from 0.5 through 5.0 and updates an existing user/movie pair. Numeric profile IDs are identifiers, **not authentication**. This MVP has no accounts or access control; do not use it as a public multi-user ratings service without adding authentication and authorization.
+
+## Configuration and storage
+
+| Variable | Purpose | Required |
+|---|---|---|
+| `DATABASE_URL` | SQLAlchemy database connection; defaults to local SQLite when unset | Required for Vercel's persistent rating storage |
+| `TMDB_API_READ_ACCESS_TOKEN` | Server-side TMDB application token | Optional |
+| `OMDB_API_KEY` | Server-side OMDb API key | Optional |
+
+`.env.example` contains variable names and development examples only. The app does not load a `.env` file automatically; export variables in your shell or configure them in the hosting dashboard. Never commit real credentials, user ratings, raw datasets, or trained model files.
+
+Local ratings use SQLite in `artifacts/recommender.db`. Hosted persistence uses PostgreSQL through `DATABASE_URL`; Vercel's filesystem is temporary. The browser watchlist and profile ID are stored in that browser's local storage and do not sync across devices. The project uses local profile IDs without authentication.
+
+## Testing and code quality
+
+Run the automated suite and linter from the project root:
 
 ```bash
 python -m pytest -q
 python -m ruff check .
 ```
 
-## CI
+Coverage includes data validation and splitting, content and collaborative models, ranking evaluation, API validation and rating updates, frontend API flows, and mocked external-rating responses (including timeout, missing-key, `N/A`, and identity-mismatch cases). GitHub Actions runs pytest and Ruff on Python 3.11 and 3.12.
 
-GitHub Actions runs tests and Ruff on Python 3.11 and 3.12 for pushes to
-`main`, pull requests and manual dispatch. No dataset or trained model is
-needed for CI.
+## Deployment
 
-## Deploy to Vercel
+The Vercel production app is [live](https://cinematch-king-09.vercel.app). The deployment builds MovieLens metadata and model artifacts, serves the static browser frontend, and routes `/api/*` requests to FastAPI. Pushes to `main` trigger the connected Vercel deployment.
 
-The production project is deployed at
-<https://cinematch-king-09.vercel.app>. The cinematic static browser frontend
-lives in `frontend/web/`; the existing FastAPI backend runs as a Python service.
-The browser sends same-origin requests to `/api/*`. The Vercel build downloads
-MovieLens latest-small and prepares the data and model artifacts; generated
-files remain out of Git.
+For a separate Vercel setup:
 
-The deployed API routes are available below (the examples can be opened in a
-browser):
+1. Import the GitHub repository into Vercel.
+2. Configure a persistent PostgreSQL `DATABASE_URL` for Preview and Production.
+3. Optionally add `TMDB_API_READ_ACCESS_TOKEN` and `OMDB_API_KEY` as server-only environment variables.
+4. Deploy the `main` branch and check `/api/health` and `/api/docs`.
 
-- [Health](https://cinematch-king-09.vercel.app/api/health)
-- [Search for Matrix](https://cinematch-king-09.vercel.app/api/movies/search?q=matrix)
-- [Public ratings for a MovieLens ID](https://cinematch-king-09.vercel.app/api/movies/external-ratings?movie_ids=2571)
-- [Similar films for The Matrix](https://cinematch-king-09.vercel.app/api/recommendations/similar/2571?limit=5)
-- [Popular picks for profile 123456789](https://cinematch-king-09.vercel.app/api/recommendations/users/123456789?limit=10)
+`vercel.json` defines the frontend/API services and includes processed `links.csv` in the API bundle for stable provider ID matching. Provider keys are optional for the app to run, but required for numeric public ratings. The deployed health and ratings GET endpoints have been verified. Production rating POST persistence has not yet been exercised.
 
-The IMDb/TMDB ratings feature is deployed. To show live numeric scores, add
-`TMDB_API_READ_ACCESS_TOKEN` and `OMDB_API_KEY` to the `cinematch` project's
-Production environment in Vercel, then redeploy. Until then the app keeps
-scores blank and can still show known official movie links.
-
-To set up or redeploy this project on Vercel, connect the GitHub repository,
-configure `DATABASE_URL` as a Vercel environment secret for Preview and
-Production, and configure `TMDB_API_READ_ACCESS_TOKEN` and `OMDB_API_KEY` as
-server-only Vercel environment variables if public ratings are desired. These
-credentials must never be committed. Deploy the updated repository to publish
-the ratings feature.
-Vercel builds the API and frontend together. Hosted ratings use PostgreSQL;
-SQLite is for local development only because serverless filesystems are
-temporary.
-
-Production checks verified the page, JavaScript, stylesheet, health, search,
-similar-film, and recommendation GET routes return HTTP 200. Rating create and
-update are covered by local API integration tests; a rating POST has not been
-run against production.
-
-Movie cards use original CSS artwork as a fallback. MovieLens supplies titles,
-genres, ratings and tags, but this project does not currently provide licensed
-poster URLs, plot summaries, cast or trailer links, so the UI does not invent
-those details.
-
-`vercel.json` defines the frontend and API services and routes `/api/*` requests
-to FastAPI. Deployments require `DATABASE_URL`; they intentionally fail at API
-startup if it is missing rather than silently writing ratings to ephemeral
-storage. Once the repository is connected, pushes to `main` deploy
-automatically.
-
-## Optional Docker demo
-
-Docker Compose builds a Python 3.12 image that works on Apple Silicon and
-standard Linux hosts, prepares the demo data/models on first launch, and serves
-the API and UI from one container:
+Optional Docker Compose demo:
 
 ```bash
 docker compose up --build
 ```
 
-Open `http://localhost:8501` for CineMatch and `http://localhost:8000/api/docs` for
-the API. Named volumes keep MovieLens, models and SQLite ratings between
-container restarts. The first launch downloads the public MovieLens archive;
-no credentials or datasets are baked into the image. To stop the demo, press
-Ctrl+C. Removing Docker volumes will remove the generated data and local
-ratings.
+Open Streamlit at `http://localhost:8501` and API docs at `http://localhost:8000/api/docs`. The first container launch downloads and prepares MovieLens. Named volumes persist generated data, model artifacts, and local ratings; removing those volumes deletes that local state.
 
-## Portfolio and model documentation
+## Known limitations
 
-- [System architecture](docs/ARCHITECTURE.md)
-- [Model card and evaluation limits](docs/MODEL_CARD.md)
-- [Measured local performance](docs/PERFORMANCE.md), generated by
-  `python scripts/benchmark.py`
-- [Interview questions and project decisions](docs/INTERVIEW_QA.md)
+- MovieLens tags and genres are sparse metadata, not plot summaries or semantic descriptions.
+- There are no licensed posters, synopsis, cast, trailer, or streaming-availability features.
+- Public IMDb/TMDB ratings require server-side API credentials. They are not currently configured in the deployed project.
+- User profile IDs are not authenticated identities; the deployed rating endpoint is not a secure public multi-user service.
+- New visitor ratings personalize that visitor's recommendations but do not retrain the offline collaborative model.
+- Offline metrics use one MovieLens snapshot and split; they do not establish real-world quality or personalization.
+- Production rating writes still need an end-to-end check.
 
-## Project layout
+## Repository structure
 
-- `src/recommender/data/`: dataset loading and preprocessing
-- `src/recommender/models/`: recommendation algorithms
-- `src/recommender/evaluation/`: offline evaluation
-- `src/recommender/services/`: shared application services
-- `backend/app/`: API application
-- `frontend/`: local Streamlit app, API client and Vercel browser UI
-- `tests/`: automated checks and privacy-safe fixtures
-- `docs/phases/`: phase contracts and acceptance criteria
-- `data/raw/`, `data/processed/`, `artifacts/`: local generated files, excluded from Git
+```text
+backend/app/                FastAPI routes, schemas, persistence, rating service
+frontend/app.py             Local Streamlit interface
+frontend/api_client.py      Typed HTTP client used by Streamlit
+frontend/web/               Deployed HTML, CSS, and JavaScript app
+src/recommender/data/       MovieLens download, validation, and preparation
+src/recommender/models/     TF-IDF and collaborative recommendation models
+src/recommender/evaluation/ Validation-tuned ranking evaluation
+scripts/                    Demo setup and local benchmarking
+tests/                      Unit and integration tests
+docs/                       Architecture, model card, performance, interview Q&A
+docs/phases/                Project phase contracts
+data/                       Generated/downloaded local dataset (git-ignored)
+artifacts/                  Generated models, reports, and SQLite DB (git-ignored)
+```
 
-See `AGENTS.md`, `MASTER_ORCHESTRATOR.md`, `PLAN.md`, and `PROGRESS.md` for the
-project workflow and current verified status. No dataset, model, API key, or
-`.env` file belongs in Git.
+## Further reading
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Model card](docs/MODEL_CARD.md)
+- [Performance measurements](docs/PERFORMANCE.md)
+- [Interview Q&A](docs/INTERVIEW_QA.md)
+- [Project plan](PLAN.md)
+- [Verified project progress](PROGRESS.md)
+
+---
+
+<div align="center">
+
+Built as an explainable, reproducible movie recommendation project. 🎞️
+
+</div>
