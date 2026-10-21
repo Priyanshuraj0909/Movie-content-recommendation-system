@@ -6,7 +6,11 @@ from html import escape
 
 import streamlit as st
 
-from frontend.api_client import APIError, RecommendationAPI
+try:
+    from frontend.api_client import APIError, RecommendationAPI
+except ModuleNotFoundError:
+    # Streamlit adds the entrypoint's folder to sys.path when launching this file.
+    from api_client import APIError, RecommendationAPI
 
 st.set_page_config(
     page_title="CineMatch | Find your next favorite",

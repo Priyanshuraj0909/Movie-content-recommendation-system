@@ -68,6 +68,7 @@ None recorded.
 - Verification: `.venv/bin/python -m pytest -q` (33 passed) and `.venv/bin/python -m ruff check .` (passed). The existing Starlette/httpx deprecation warning remains; no dependency was added.
 
 ## Phase 8 Notes
+- Fixed Streamlit's entrypoint import so `streamlit run frontend/app.py` works whether launched from the repository root or the `frontend/` directory; both launch modes returned HTTP 200 during verification.
 - Added GitHub Actions CI for Python 3.11 and 3.12, running pytest and Ruff without any dataset or model artifact.
 - Moved default API model/data loading into FastAPI startup. Imports and CI collection work on a fresh checkout; startup reports missing setup files if the local demo has not been prepared.
 - Added `scripts/setup_demo.sh` for reproducible data preparation, model training and offline ranking evaluation. Added optional Docker Compose with separate API/UI ports and named volumes for generated data and ratings.
