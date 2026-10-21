@@ -95,6 +95,18 @@ def test_imdb_only_when_tmdb_key_is_missing(monkeypatch: pytest.MonkeyPatch) -> 
     assert result["imdb"]["rating"] == 8.7
 
 
+def test_known_provider_ids_keep_official_links_without_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("TMDB_API_READ_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("OMDB_API_KEY", raising=False)
+    result = ratings.get_movie_ratings(1, "The Matrix (1999)", "603", "0133093")
+    assert result["tmdb"]["rating"] is None
+    assert result["tmdb"]["url"] == "https://www.themoviedb.org/movie/603"
+    assert result["imdb"]["rating"] is None
+    assert result["imdb"]["url"] == "https://www.imdb.com/title/tt0133093/"
+
+
 def test_tmdb_title_year_fallback_is_verified(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TMDB_API_READ_ACCESS_TOKEN", "test-token")
     monkeypatch.delenv("OMDB_API_KEY", raising=False)

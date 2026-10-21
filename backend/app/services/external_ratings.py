@@ -121,6 +121,16 @@ def get_movie_ratings(
     result = _empty(movie_id, title)
     configured_tmdb_id = tmdb_key
     configured_imdb_id = imdb_key
+    if configured_tmdb_id:
+        result["tmdb"].update(
+            tmdb_id=configured_tmdb_id,
+            url=f"https://www.themoviedb.org/movie/{configured_tmdb_id}",
+        )
+    if configured_imdb_id:
+        result["imdb"].update(
+            imdb_id=configured_imdb_id,
+            url=f"https://www.imdb.com/title/{configured_imdb_id}/",
+        )
     tmdb_token = os.getenv("TMDB_API_READ_ACCESS_TOKEN", "").strip()
     omdb_key = os.getenv("OMDB_API_KEY", "").strip()
 
