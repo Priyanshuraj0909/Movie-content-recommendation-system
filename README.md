@@ -82,6 +82,22 @@ The model combines title, genres and aggregated tags. Results are ordered by
 cosine similarity with movie ID as a deterministic tie-breaker; the seed and
 excluded watched movies are omitted.
 
+## Train the collaborative model
+
+Fit the regularized bias baseline and seeded matrix factorization on the
+training split, then compare rating predictions on validation data:
+
+```bash
+python -m recommender.models.collaborative
+```
+
+The command saves `artifacts/collaborative_recommender.joblib` and validation
+RMSE/MAE to `artifacts/collaborative_metrics.json`. The model falls back to
+regularized user/item biases for sparse or unknown users and uses a
+shrinkage-adjusted popularity ranking for cold-start recommendation requests.
+Recommendations exclude items present in the training history and any
+additional IDs supplied by the caller.
+
 ## Quality checks
 
 ```bash
