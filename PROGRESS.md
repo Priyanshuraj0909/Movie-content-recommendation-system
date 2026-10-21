@@ -1,5 +1,5 @@
 # Project Progress
-Current phase: Phase 6 — COMPLETE
+Current phase: Phase 7 — COMPLETE
 
 | Phase | Status | Evidence |
 |---|---|---|
@@ -9,7 +9,7 @@ Current phase: Phase 6 — COMPLETE
 | 4 Collaborative | Complete | Python 3.12 ARM64; `python -m pytest -q` (21 passed); `python -m ruff check .` (passed); compared models on 9,818 validation ratings. |
 | 5 Hybrid & evaluation | Complete | Python 3.12 ARM64; `python -m pytest -q` (25 passed); `python -m ruff check .` (passed); validation-tuned blend evaluated on untouched test split. |
 | 6 API & database | Complete | Python 3.12 ARM64; `python -m pytest -q` (29 passed); `python -m ruff check .` (passed); FastAPI routes verified with temporary SQLite integration tests. |
-| 7 UI | Not started | |
+| 7 UI | Complete | Python 3.12 ARM64; `python -m pytest -q` (33 passed); `python -m ruff check .` (passed); live Streamlit walkthrough covered search, rating, cold-start, similar films and offline states. |
 | 8 Deployment | Not started | |
 
 ## Decisions
@@ -59,3 +59,10 @@ None recorded.
 - Added integration coverage using temporary SQLite databases; API tests cover all required routes, rating updates, validation and unknown movie handling.
 - Fixed model serialization when training via `python -m` and regenerated local content and collaborative artifacts. A fresh API import successfully loaded both artifacts. Generated model and database files remain ignored by Git.
 - Verification: `.venv/bin/python -m pytest -q` (29 passed) and `.venv/bin/python -m ruff check .` (passed). TestClient reports a Starlette deprecation warning about the installed httpx integration; tests pass and no extra dependency was installed.
+
+## Phase 7 Notes
+- Added a dark, responsive Streamlit interface with title search, similar-film discovery, profile-based recommendations and half-star rating controls.
+- Added a small API client with readable service errors, loading states, API connection status and configurable API URL/profile ID. The UI makes no third-party poster or metadata requests.
+- Added HTTP client tests and Streamlit AppTest flows for discovery/rating, recommendations and similar films.
+- Live walkthrough against the FastAPI service verified search, popularity fallback for a cold-start profile, similar-film results, saving a rating to a temporary SQLite database and excluding the rated movie from the next personalized list. The API-offline message was also verified.
+- Verification: `.venv/bin/python -m pytest -q` (33 passed) and `.venv/bin/python -m ruff check .` (passed). The existing Starlette/httpx deprecation warning remains; no dependency was added.

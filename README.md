@@ -147,6 +147,33 @@ ratings and is ignored by Git. Pass an alternate SQLite URL to `create_app` when
 embedding the app or isolating it in tests. Unknown movie IDs return 404 and
 invalid request values return 422.
 
+## Run the Streamlit interface
+
+With the API running in one terminal, open a second terminal at the project
+root and start the UI:
+
+```bash
+streamlit run frontend/app.py
+```
+
+The browser opens CineMatch, a dark, cinema-inspired interface for title search,
+similar-film discovery, half-star ratings and personalized recommendations.
+Use the sidebar to set the API URL and local profile ID. A profile with no
+positive ratings starts with the popularity fallback; saved ratings shape its
+next personalized list. The UI uses the existing API and makes no poster or
+metadata requests to third parties.
+
+### UI walkthrough checklist
+
+1. Start the API and Streamlit in separate terminals; check the sidebar reports
+   the movie catalog as connected.
+2. In Discover, search for a known title, save a rating, and confirm the saved
+   message appears.
+3. Open For you and confirm recommendations load for the current profile.
+4. In Similar films, find a title and load its similar movies.
+5. Stop the API, confirm the UI shows a connection message, then restart it and
+   confirm requests work again.
+
 ## Quality checks
 
 ```bash
@@ -161,6 +188,7 @@ python -m ruff check .
 - `src/recommender/evaluation/`: offline evaluation
 - `src/recommender/services/`: shared application services
 - `backend/app/`: API application
+- `frontend/`: Streamlit application and API client
 - `tests/`: automated checks and privacy-safe fixtures
 - `docs/phases/`: phase contracts and acceptance criteria
 - `data/raw/`, `data/processed/`, `artifacts/`: local generated files, excluded from Git
