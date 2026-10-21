@@ -2,8 +2,8 @@
 ## Objective
 Build a local-first personalized movie recommendation system with content-based, collaborative, and hybrid algorithms; reproducible evaluation; FastAPI; Streamlit; and optional MLflow.
 ## Architecture
-MovieLens ratings + movies -> validated preprocessing -> feature store and train/validation/test split -> content TF-IDF / collaborative matrix factorization -> hybrid ranking -> FastAPI -> Streamlit.
-SQLite persists local users and ratings; artifact files contain fitted models and metadata. Keep external movie-poster APIs optional.
+MovieLens ratings + movies -> validated preprocessing -> feature store and train/validation/test split -> content TF-IDF / collaborative matrix factorization -> hybrid ranking -> FastAPI -> local Streamlit or Vercel static web frontend.
+SQLite persists local ratings; hosted deployments use PostgreSQL through `DATABASE_URL`. Artifact files contain fitted models and metadata. Keep external movie-poster APIs optional.
 ## Dataset strategy
 Start with GroupLens MovieLens latest-small (movies.csv, ratings.csv, tags.csv, links.csv). For richer descriptions/posters, add an optional legally accessible metadata source only after checking licensing and ID joins. Do not pretend MovieLens genres are plot descriptions.
 ## Ranking design

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#131318" />
+    <meta name="description" content="Find your next favorite story with CineMatch." />
+    <title>CineMatch — your personal cinema guide</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="/" aria-label="CineMatch home"><span class="brand-icon">▰</span><span>CineMatch</span></a>
+        <p class="tagline">A little more you in every recommendation.</p>
+
+        <label class="field-label" for="profile-id">Your profile</label>
+        <div class="profile-control">
+          <input id="profile-id" type="number" min="1" value="1001" aria-label="Your profile ID" />
+          <button id="profile-minus" class="stepper" type="button" aria-label="Decrease profile ID">−</button>
+          <button id="profile-plus" class="stepper" type="button" aria-label="Increase profile ID">+</button>
+        </div>
+
+        <nav class="nav-tabs" aria-label="Explore">
+          <button class="nav-tab active" data-page="discover"><span class="nav-dot"></span>Discover</button>
+          <button class="nav-tab" data-page="for-you"><span class="nav-dot"></span>For you</button>
+          <button class="nav-tab" data-page="similar"><span class="nav-dot"></span>Similar films</button>
+        </nav>
+
+        <div id="connection" class="connection pending"><span class="status-dot"></span><span>Connecting to your cinema…</span></div>
+        <div class="sidebar-foot"><span class="foot-mark">✳</span><p>Your ratings are saved to your profile and help shape your next picks.</p></div>
+      </aside>
+
+      <main class="main-content">
+        <section class="hero">
+          <div class="eyebrow"><span></span>Your personal cinema guide</div>
+          <h1>Find your next<br />favorite story.</h1>
+          <p>Search the collection, tell us what you love, and discover films that feel like they were picked just for you.</p>
+          <div class="hero-decoration" aria-hidden="true"><span>✳</span><span>✴</span><span>✳</span></div>
+        </section>
+
+        <section id="page-discover" class="page active" aria-labelledby="discover-title">
+          <div class="section-heading"><div><p class="section-kicker">THE COLLECTION</p><h2 id="discover-title">Explore the collection</h2></div><span class="section-count">MOVIE NIGHT STARTS HERE</span></div>
+          <label class="search-label" for="movie-search">Search by movie title</label>
+          <div class="search-wrap"><span class="search-icon" aria-hidden="true">⌕</span><input id="movie-search" type="search" placeholder="Try a title like The Matrix…" autocomplete="off" /><kbd>↵</kbd></div>
+          <div id="discover-results" class="results" aria-live="polite"><div class="empty-state"><span class="empty-icon">⌕</span><p>Search for a film, then rate it to shape your personal picks.</p></div></div>
+        </section>
+
+        <section id="page-for-you" class="page" aria-labelledby="for-you-title">
+          <div class="section-heading"><div><p class="section-kicker">CURATED FOR PROFILE <span id="profile-label">—</span></p><h2 id="for-you-title">Picked for your profile</h2></div><button id="refresh-picks" class="subtle-button" type="button">↻ Refresh</button></div>
+          <p class="section-description">Your ratings help us find stories that match your taste.</p>
+          <div id="personal-results" class="results" aria-live="polite"><div class="loading-state">Finding a few good stories…</div></div>
+        </section>
+
+        <section id="page-similar" class="page" aria-labelledby="similar-title">
+          <div class="section-heading"><div><p class="section-kicker">FOLLOW A FEELING</p><h2 id="similar-title">More like a favorite</h2></div></div>
+          <p class="section-description">Choose a movie you already love and we’ll find its cinematic cousins.</p>
+          <label class="search-label" for="similar-search">Find a movie to start with</label>
+          <div class="search-wrap"><span class="search-icon" aria-hidden="true">⌕</span><input id="similar-search" type="search" placeholder="Search for a movie…" autocomplete="off" /></div>
+          <div id="similar-seeds" class="seed-list" aria-live="polite"></div>
+          <div id="similar-results" class="results" aria-live="polite"></div>
+        </section>
+        <footer class="page-footer"><span>MADE FOR MOVIE LOVERS</span><span>✳ &nbsp; CineMatch</span></footer>
+      </main>
+    </div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>

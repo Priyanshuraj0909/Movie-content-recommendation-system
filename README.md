@@ -141,24 +141,25 @@ Then start the local API from the project root:
 uvicorn backend.app.main:app --reload
 ```
 
-The API documentation is available at `http://127.0.0.1:8000/docs`. The
+The API documentation is available at `http://127.0.0.1:8000/api/docs`. The
 available routes are:
 
-- `GET /health` reports service status and the number of loaded movies.
-- `GET /movies/search?q=star&limit=20` searches titles without interpreting the
+- `GET /api/health` reports service status and the number of loaded movies.
+- `GET /api/movies/search?q=star&limit=20` searches titles without interpreting the
   query as a regular expression.
-- `GET /recommendations/similar/{movie_id}?limit=10` returns content matches.
-- `GET /recommendations/users/{user_id}?limit=10` ranks unseen training-catalog
+- `GET /api/recommendations/similar/{movie_id}?limit=10` returns content matches.
+- `GET /api/recommendations/users/{user_id}?limit=10` ranks unseen training-catalog
   movies from saved positive local ratings and the trained models. Users with
   no positive saved ratings receive the training-only popularity fallback.
-- `POST /ratings` accepts `{"user_id": 7, "movie_id": 1, "rating": 4.5}`.
+- `POST /api/ratings` accepts `{"user_id": 7, "movie_id": 1, "rating": 4.5}`.
   Ratings from 0.5 to 5.0 are accepted in half-star steps; submitting the same
   user/movie pair updates its saved rating.
 
-The default SQLite database is `artifacts/recommender.db`. It stores only local
-ratings and is ignored by Git. Pass an alternate SQLite URL to `create_app` when
-embedding the app or isolating it in tests. Unknown movie IDs return 404 and
-invalid request values return 422.
+The default SQLite database is `artifacts/recommender.db` for local use and is
+ignored by Git. Set `DATABASE_URL` to a PostgreSQL connection string on hosted
+platforms; the app uses SQLAlchemy's Psycopg driver. Never commit the production
+connection string. Unknown movie IDs return 404 and invalid request values
+return 422.
 
 The API loads its prepared movie metadata and models during application startup.
 This keeps importing the application safe for tests and CI on a fresh clone;
@@ -173,7 +174,7 @@ root and start the UI:
 streamlit run frontend/app.py
 ```
 
-The browser opens CineMatch, a dark, cinema-inspired interface for title search,
+The browser opens the local Streamlit version of CineMatch, a dark, cinema-inspired interface for title search,
 similar-film discovery, half-star ratings and personalized recommendations.
 Use the sidebar to set the API URL and local profile ID. A profile with no
 positive ratings starts with the popularity fallback; saved ratings shape its
@@ -204,6 +205,20 @@ GitHub Actions runs tests and Ruff on Python 3.11 and 3.12 for pushes to
 `main`, pull requests and manual dispatch. No dataset or trained model is
 needed for CI.
 
+## Deploy to Vercel
+
+The Vercel deployment uses a static browser frontend in `frontend/web/` and the
+existing FastAPI backend as a Python service. Vercel builds the MovieLens demo
+data and models from the public GroupLens archive; generated files remain out
+of Git. The API uses a hosted PostgreSQL database for ratings.
+
+`vercel.json` defines the two services and sends `/api/*` requests to FastAPI.
+Before deploying, connect a PostgreSQL database and set its `DATABASE_URL` as a
+Vercel environment secret for Preview and Production. Deployments intentionally
+fail at API import if that variable is missing, since serverless filesystems do
+not provide persistent SQLite storage. After connecting the GitHub repository
+to the Vercel project, pushes to `main` deploy automatically.
+
 ## Optional Docker demo
 
 Docker Compose builds a Python 3.12 image that works on Apple Silicon and
@@ -214,7 +229,7 @@ the API and UI from one container:
 docker compose up --build
 ```
 
-Open `http://localhost:8501` for CineMatch and `http://localhost:8000/docs` for
+Open `http://localhost:8501` for CineMatch and `http://localhost:8000/api/docs` for
 the API. Named volumes keep MovieLens, models and SQLite ratings between
 container restarts. The first launch downloads the public MovieLens archive;
 no credentials or datasets are baked into the image. To stop the demo, press
@@ -236,7 +251,7 @@ ratings.
 - `src/recommender/evaluation/`: offline evaluation
 - `src/recommender/services/`: shared application services
 - `backend/app/`: API application
-- `frontend/`: Streamlit application and API client
+- `frontend/`: local Streamlit app, API client and Vercel browser UI
 - `tests/`: automated checks and privacy-safe fixtures
 - `docs/phases/`: phase contracts and acceptance criteria
 - `data/raw/`, `data/processed/`, `artifacts/`: local generated files, excluded from Git

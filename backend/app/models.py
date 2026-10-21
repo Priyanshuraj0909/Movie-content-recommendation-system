@@ -1,6 +1,6 @@
 """SQLAlchemy models for local user ratings."""
 
-from sqlalchemy import CheckConstraint, Integer, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, Integer, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.database import Base
@@ -18,6 +18,6 @@ class UserRating(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     movie_id: Mapped[int] = mapped_column(Integer, nullable=False)
     rating: Mapped[float] = mapped_column(nullable=False)

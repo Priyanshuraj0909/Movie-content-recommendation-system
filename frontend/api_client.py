@@ -55,24 +55,24 @@ class RecommendationAPI:
             ) from error
 
     def health(self) -> dict[str, Any]:
-        return self._request("GET", "/health")
+        return self._request("GET", "/api/health")
 
     def search_movies(self, query: str, *, limit: int = 20) -> list[dict[str, Any]]:
-        return self._request("GET", "/movies/search", params={"q": query, "limit": limit})
+        return self._request("GET", "/api/movies/search", params={"q": query, "limit": limit})
 
     def similar_movies(self, movie_id: int, *, limit: int = 8) -> list[dict[str, Any]]:
         return self._request(
-            "GET", f"/recommendations/similar/{movie_id}", params={"limit": limit}
+            "GET", f"/api/recommendations/similar/{movie_id}", params={"limit": limit}
         )
 
     def recommendations(self, user_id: int, *, limit: int = 12) -> list[dict[str, Any]]:
         return self._request(
-            "GET", f"/recommendations/users/{user_id}", params={"limit": limit}
+            "GET", f"/api/recommendations/users/{user_id}", params={"limit": limit}
         )
 
     def save_rating(self, user_id: int, movie_id: int, rating: float) -> dict[str, Any]:
         return self._request(
             "POST",
-            "/ratings",
+            "/api/ratings",
             payload={"user_id": user_id, "movie_id": movie_id, "rating": rating},
         )

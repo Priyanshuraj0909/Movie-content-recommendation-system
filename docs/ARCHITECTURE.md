@@ -29,11 +29,23 @@ flowchart LR
   SPLIT --> MOVIES
   TFIDF --> MODELS
   MF --> MODELS
+  subgraph Hosted[Vercel Services deployment]
+    WEB[Static CineMatch web UI]
+    VAPI[FastAPI Python service]
+    DB[(Neon PostgreSQL ratings)]
+    WEB -->|/api requests| VAPI
+    VAPI --> DB
+    VAPI --> MODELS
+    VAPI --> MOVIES
+  end
 ```
 
 ## Request path
 
-The Streamlit UI calls the FastAPI service through `frontend/api_client.py`.
+The local Streamlit UI calls the FastAPI service through `frontend/api_client.py`.
+The hosted browser UI in `frontend/web/` uses the same `/api/*` routes on the
+Vercel deployment. Local runs use SQLite; hosted runs use PostgreSQL through
+`DATABASE_URL`.
 FastAPI validates inputs and serializes responses with Pydantic schemas. Search
 reads the processed movie metadata; similarity and personalized rankings use
 the fitted artifacts. Locally submitted ratings live in SQLite and contribute

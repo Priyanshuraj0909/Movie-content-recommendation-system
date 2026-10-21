@@ -16,7 +16,7 @@ def test_api_client_search_and_rating_payload() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
-        if request.url.path == "/movies/search":
+        if request.url.path == "/api/movies/search":
             return httpx.Response(200, json=[{"movie_id": 1, "title": "Star Voyage"}])
         return httpx.Response(201, json={"user_id": 7, "movie_id": 1, "rating": 4.5})
 

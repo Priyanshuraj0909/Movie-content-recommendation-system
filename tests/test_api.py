@@ -51,40 +51,40 @@ def client(tmp_path: Path) -> TestClient:
 
 
 def test_health_and_movie_search(client: TestClient) -> None:
-    health = client.get("/health")
+    health = client.get("/api/health")
     assert health.status_code == 200
     assert health.json() == {"status": "ok", "movies_loaded": 5}
 
-    search = client.get("/movies/search", params={"q": "galaxy"})
+    search = client.get("/api/movies/search", params={"q": "galaxy"})
     assert search.status_code == 200
     assert search.json()[0]["movie_id"] == 2
-    assert client.get("/movies/search", params={"q": "no match"}).json() == []
+    assert client.get("/api/movies/search", params={"q": "no match"}).json() == []
 
 
 def test_similar_recommendations_and_unknown_movie(client: TestClient) -> None:
-    response = client.get("/recommendations/similar/1", params={"limit": 5})
+    response = client.get("/api/recommendations/similar/1", params={"limit": 5})
     assert response.status_code == 200
     assert response.json()
     assert all(item["movie_id"] != 1 for item in response.json())
-    assert client.get("/recommendations/similar/999").status_code == 404
+    assert client.get("/api/recommendations/similar/999").status_code == 404
 
 
 def test_rating_create_update_and_personalized_recommendations(client: TestClient) -> None:
-    before = client.get("/recommendations/users/99").json()
+    before = client.get("/api/recommendations/users/99").json()
     assert before
 
     payload = {"user_id": 99, "movie_id": 1, "rating": 5.0}
-    created = client.post("/ratings", json=payload)
+    created = client.post("/api/ratings", json=payload)
     assert created.status_code == 201
     assert created.json()["rating"] == 5.0
 
-    recommendations = client.get("/recommendations/users/99", params={"limit": 5})
+    recommendations = client.get("/api/recommendations/users/99", params={"limit": 5})
     assert recommendations.status_code == 200
     assert recommendations.json()
     assert all(item["movie_id"] != 1 for item in recommendations.json())
 
     payload["rating"] = 4.0
-    updated = client.post("/ratings", json=payload)
+    updated = client.post("/api/ratings", json=payload)
     assert updated.status_code == 201
     assert updated.json()["rating"] == 4.0
     with client.app.state.session_factory() as session:
@@ -96,12 +96,12 @@ def test_rating_create_update_and_personalized_recommendations(client: TestClien
 
 def test_rating_input_validation_and_unknown_movie(client: TestClient) -> None:
     invalid_scale = client.post(
-        "/ratings", json={"user_id": 3, "movie_id": 1, "rating": 3.2}
+        "/api/ratings", json={"user_id": 3, "movie_id": 1, "rating": 3.2}
     )
     assert invalid_scale.status_code == 422
 
     unknown_movie = client.post(
-        "/ratings", json={"user_id": 3, "movie_id": 999, "rating": 4.0}
+        "/api/ratings", json={"user_id": 3, "movie_id": 999, "rating": 4.0}
     )
     assert unknown_movie.status_code == 404
 
@@ -135,4 +135,7 @@ def test_default_app_loads_models_during_startup(
     )
     app = create_app(database_url=f"sqlite:///{tmp_path / 'startup.db'}")
     with TestClient(app) as startup_client:
-        assert startup_client.get("/health").json() == {"status": "ok", "movies_loaded": 3}
+        assert startup_client.get("/api/health").json() == {
+            "status": "ok",
+            "movies_loaded": 3,
+        }

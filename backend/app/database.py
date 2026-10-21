@@ -1,4 +1,4 @@
-"""SQLite persistence for locally submitted user ratings."""
+"""SQLite/PostgreSQL persistence for submitted user ratings."""
 
 from __future__ import annotations
 
@@ -14,7 +14,9 @@ class Base(DeclarativeBase):
 
 
 def make_session_factory(database_url: str) -> sessionmaker[Session]:
-    """Create tables and return a session factory for a SQLite database URL."""
+    """Create tables and return a session factory for SQLite or PostgreSQL."""
+    if database_url.startswith("postgresql://"):
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
     connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
     engine = create_engine(database_url, connect_args=connect_args)
     Base.metadata.create_all(engine)

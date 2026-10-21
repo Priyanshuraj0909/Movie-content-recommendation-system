@@ -24,6 +24,7 @@ jobs:
           cache: pip
           cache-dependency-path: |
             requirements.txt
+            requirements-ui.txt
             requirements-dev.txt
       - name: Install project and development dependencies
         run: |

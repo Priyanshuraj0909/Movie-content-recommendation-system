@@ -1,0 +1,30 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "web": {
+      "root": "frontend/web"
+    },
+    "api": {
+      "root": ".",
+      "framework": "fastapi",
+      "entrypoint": "vercel_entry.py",
+      "installCommand": "python -m pip install -r requirements.txt && python -m pip install --no-deps .",
+      "buildCommand": "bash scripts/setup_demo.sh --skip-evaluation",
+      "includeFiles": [
+        "artifacts/content_recommender.joblib",
+        "artifacts/collaborative_recommender.joblib",
+        "data/processed/movies_with_tags.csv"
+      ]
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": { "service": "api" }
+    },
+    {
+      "source": "/(.*)",
+      "destination": { "service": "web" }
+    }
+  ]
+}

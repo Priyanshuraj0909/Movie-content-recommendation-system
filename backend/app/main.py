@@ -1,12 +1,13 @@
 """FastAPI application for searching movies and serving recommendations."""
 
+import os
 from collections.abc import Iterable
 from contextlib import asynccontextmanager
 from typing import Annotated
 
 import numpy as np
 import pandas as pd
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -67,8 +68,11 @@ def create_app(
         movie_table["title"] = movie_table["title"].fillna("").astype(str)
         movie_table["genres"] = movie_table["genres"].fillna("").astype(str)
         movie_table = movie_table.drop_duplicates("movieId").set_index("movieId", drop=False)
+    configured_database_url = database_url or os.environ.get("DATABASE_URL")
+    if configured_database_url is None and os.environ.get("VERCEL"):
+        raise RuntimeError("Set DATABASE_URL to a persistent PostgreSQL database for Vercel.")
     factory = make_session_factory(
-        database_url or sqlite_url(ARTIFACTS_DIR / "recommender.db")
+        configured_database_url or sqlite_url(ARTIFACTS_DIR / "recommender.db")
     )
 
     @asynccontextmanager
@@ -95,7 +99,13 @@ def create_app(
         app.state.movies = movie_table
         yield
 
-    app = FastAPI(title="Movie Recommendation API", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(
+        title="Movie Recommendation API",
+        version="0.1.0",
+        lifespan=lifespan,
+        docs_url="/api/docs",
+        openapi_url="/api/openapi.json",
+    )
     app.state.session_factory = factory
     if content_model is not None and collaborative_model is not None and movie_table is not None:
         app.state.content_model = content_model
@@ -106,12 +116,13 @@ def create_app(
         yield from get_session(factory)
 
     SessionDep = Annotated[Session, Depends(session_dependency)]
+    router = APIRouter()
 
-    @app.get("/health", response_model=HealthResponse)
+    @router.get("/health", response_model=HealthResponse)
     def health(request: Request) -> HealthResponse:
         return HealthResponse(status="ok", movies_loaded=len(request.app.state.movies))
 
-    @app.get("/movies/search", response_model=list[MovieResponse])
+    @router.get("/movies/search", response_model=list[MovieResponse])
     def search_movies(
         request: Request,
         q: Annotated[str, Query(min_length=1, max_length=100)],
@@ -126,7 +137,7 @@ def create_app(
             for row in matches.head(limit).itertuples()
         ]
 
-    @app.get("/recommendations/similar/{movie_id}", response_model=list[RecommendationResponse])
+    @router.get("/recommendations/similar/{movie_id}", response_model=list[RecommendationResponse])
     def similar_movies(
         movie_id: int,
         request: Request,
@@ -151,7 +162,7 @@ def create_app(
             for item in recommendations
         ]
 
-    @app.get("/recommendations/users/{user_id}", response_model=list[RecommendationResponse])
+    @router.get("/recommendations/users/{user_id}", response_model=list[RecommendationResponse])
     def user_recommendations(
         user_id: int,
         request: Request,
@@ -204,7 +215,7 @@ def create_app(
             )
         return results
 
-    @app.post("/ratings", response_model=RatingResponse, status_code=201)
+    @router.post("/ratings", response_model=RatingResponse, status_code=201)
     def save_rating(
         payload: RatingCreate,
         request: Request,
@@ -227,6 +238,7 @@ def create_app(
         session.refresh(existing)
         return RatingResponse.model_validate(existing)
 
+    app.include_router(router, prefix="/api")
     return app
 
 

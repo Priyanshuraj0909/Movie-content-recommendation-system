@@ -124,7 +124,7 @@ with st.sidebar:
         st.warning("API offline")
         st.caption(str(error))
     st.markdown("---")
-    st.caption("Your ratings stay in this project's local SQLite database.")
+    st.caption("Ratings use local SQLite here and hosted PostgreSQL when configured.")
 
 st.markdown(
     """<section class="hero"><div class="eyebrow">Your personal cinema guide</div>

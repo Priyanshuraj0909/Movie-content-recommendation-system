@@ -1,5 +1,5 @@
 # Project Progress
-Current phase: Phase 8 — COMPLETE
+Current phase: Phase 9 — IN PROGRESS
 
 | Phase | Status | Evidence |
 |---|---|---|
@@ -11,6 +11,7 @@ Current phase: Phase 8 — COMPLETE
 | 6 API & database | Complete | Python 3.12 ARM64; `python -m pytest -q` (29 passed); `python -m ruff check .` (passed); FastAPI routes verified with temporary SQLite integration tests. |
 | 7 UI | Complete | Python 3.12 ARM64; `python -m pytest -q` (33 passed); `python -m ruff check .` (passed); live Streamlit walkthrough covered search, rating, cold-start, similar films and offline states. |
 | 8 Deployment | Complete | Python 3.12 ARM64; `python -m pytest -q` (34 passed); `python -m ruff check .` (passed); 34 tests also passed in a fresh-clone simulation with datasets and artifacts excluded. |
+| 9 Vercel deployment | In progress | Vercel Services frontend/API config and persistent PostgreSQL integration are being prepared; deployment verification pending. |
 
 ## Decisions
 - Python 3.11/3.12 ARM64 environment preferred.
