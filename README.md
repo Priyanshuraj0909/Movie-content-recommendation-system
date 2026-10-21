@@ -13,12 +13,13 @@ same domain. The deployed backend health check is available at
 <https://cinematch-king-09.vercel.app/api/health> and reports the loaded movie
 count.
 
-The browser app includes Home, Explore, AI picks, and Watchlist views. Search for
-a title such as `Matrix`; select a result to see its catalog details or discover
-similar films. Movie cards let you save a half-star rating for the current
-profile. Ratings go to the API and hosted PostgreSQL database. The watchlist and
-profile ID are stored in the current browser, so they do not sync across
-browsers or devices. There is no account login in this MVP.
+The browser app includes Home, Movie search, AI picks, and Watchlist views. The
+Movie search tab is in the top navigation; AI picks also has a Search movies
+button. Search for a title such as `Matrix`; select a result to see its catalog
+details or discover similar films. Movie cards let you save a half-star rating
+for the current profile. Ratings go to the API and hosted PostgreSQL database.
+The watchlist and profile ID are stored in the current browser, so they do not
+sync across browsers or devices. There is no account login in this MVP.
 
 The MovieLens catalog provides titles, genres, ratings, tags, and IDs. CineMatch
 uses original CSS artwork; it does not currently include licensed posters, plot

@@ -21,7 +21,7 @@
 
       <nav class="primary-nav" aria-label="Main navigation">
         <button class="nav-link active" type="button" data-page-link="home">Home</button>
-        <button class="nav-link" type="button" data-page-link="explore">Explore</button>
+        <button class="nav-link" type="button" data-page-link="explore">Movie search</button>
         <button class="nav-link" type="button" data-page-link="recommendations">AI picks</button>
         <button class="nav-link" type="button" data-page-link="watchlist">Watchlist <span id="watchlist-count" class="nav-count">0</span></button>
       </nav>
@@ -85,7 +85,7 @@
       </section>
 
       <section id="page-recommendations" class="page content-page" aria-labelledby="recommendations-title">
-        <div class="page-intro recommendation-intro"><p class="section-kicker"><span class="sparkle">✳</span> MADE FOR YOUR TASTE</p><h1 id="recommendations-title">Your next favorite,<br /><em>waiting to happen.</em></h1><p>Your saved ratings help shape these picks. Save a few favorites and come back to see your profile take shape.</p><div class="recommendation-profile"><span class="profile-avatar">C</span><span>PROFILE <strong id="profile-label">—</strong></span><button id="refresh-picks" class="icon-button" type="button" aria-label="Refresh recommendations">↻</button></div></div>
+        <div class="page-intro recommendation-intro"><p class="section-kicker"><span class="sparkle">✳</span> MADE FOR YOUR TASTE</p><h1 id="recommendations-title">Your next favorite,<br /><em>waiting to happen.</em></h1><p>Your saved ratings help shape these picks. Save a few favorites and come back to see your profile take shape.</p><button class="button button-quiet recommendations-search" type="button" data-page-link="explore"><span aria-hidden="true">⌕</span> Search movies</button><div class="recommendation-profile"><span class="profile-avatar">C</span><span>PROFILE <strong id="profile-label">—</strong></span><button id="refresh-picks" class="icon-button" type="button" aria-label="Refresh recommendations">↻</button></div></div>
         <div id="personal-results" class="poster-grid recommendation-grid" aria-live="polite"><div class="skeleton-grid"><span></span><span></span><span></span><span></span></div></div>
       </section>
 

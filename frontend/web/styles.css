@@ -219,6 +219,7 @@ main { min-height: calc(100vh - 150px); }
 .button-primary:hover { box-shadow: 0 10px 30px rgb(124 86 224 / 42%); }
 .button-quiet { border-color: rgb(255 255 255 / 15%); background: rgb(255 255 255 / 5%); color: #e6e4ed; }
 .button-quiet:hover, .button-outline:hover { border-color: rgb(185 160 255 / 60%); background: rgb(139 92 246 / 13%); }
+.recommendations-search { margin-top: 18px; }
 .button-outline { min-height: 41px; border-color: rgb(185 160 255 / 35%); background: transparent; color: #e4dcff; }
 .button-play { font-size: 13px; }
 .button-search { font-size: 20px; line-height: 1; }
