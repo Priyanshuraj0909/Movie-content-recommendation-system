@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -211,6 +212,9 @@ class ContentRecommender:
     def save(self, path: Path) -> None:
         """Persist the fitted sparse model with a format version."""
         self._require_fitted()
+        if type(self).__module__ == "__main__":
+            sys.modules["recommender.models.content"] = sys.modules["__main__"]
+            type(self).__module__ = "recommender.models.content"
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         joblib.dump({"format_version": MODEL_FORMAT_VERSION, "model": self}, path)

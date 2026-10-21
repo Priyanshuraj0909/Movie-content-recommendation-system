@@ -119,6 +119,34 @@ Dataset splits and model artifacts must be prepared first. Metrics describe
 this MovieLens development dataset and split; they are not a general
 performance guarantee.
 
+## Run the recommendation API
+
+Prepare the data and model files first by running the Phase 2–5 commands above.
+Then start the local API from the project root:
+
+```bash
+uvicorn backend.app.main:app --reload
+```
+
+The API documentation is available at `http://127.0.0.1:8000/docs`. The
+available routes are:
+
+- `GET /health` reports service status and the number of loaded movies.
+- `GET /movies/search?q=star&limit=20` searches titles without interpreting the
+  query as a regular expression.
+- `GET /recommendations/similar/{movie_id}?limit=10` returns content matches.
+- `GET /recommendations/users/{user_id}?limit=10` ranks unseen training-catalog
+  movies from saved positive local ratings and the trained models. Users with
+  no positive saved ratings receive the training-only popularity fallback.
+- `POST /ratings` accepts `{"user_id": 7, "movie_id": 1, "rating": 4.5}`.
+  Ratings from 0.5 to 5.0 are accepted in half-star steps; submitting the same
+  user/movie pair updates its saved rating.
+
+The default SQLite database is `artifacts/recommender.db`. It stores only local
+ratings and is ignored by Git. Pass an alternate SQLite URL to `create_app` when
+embedding the app or isolating it in tests. Unknown movie IDs return 404 and
+invalid request values return 422.
+
 ## Quality checks
 
 ```bash

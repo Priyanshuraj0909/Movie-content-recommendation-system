@@ -1,5 +1,5 @@
 # Project Progress
-Current phase: Phase 5 — COMPLETE
+Current phase: Phase 6 — COMPLETE
 
 | Phase | Status | Evidence |
 |---|---|---|
@@ -8,7 +8,7 @@ Current phase: Phase 5 — COMPLETE
 | 3 Content model | Complete | Python 3.12 ARM64; `python -m pytest -q` (14 passed); `python -m ruff check .` (passed); trained and loaded artifact on all 9,742 movies. |
 | 4 Collaborative | Complete | Python 3.12 ARM64; `python -m pytest -q` (21 passed); `python -m ruff check .` (passed); compared models on 9,818 validation ratings. |
 | 5 Hybrid & evaluation | Complete | Python 3.12 ARM64; `python -m pytest -q` (25 passed); `python -m ruff check .` (passed); validation-tuned blend evaluated on untouched test split. |
-| 6 API & database | Not started | |
+| 6 API & database | Complete | Python 3.12 ARM64; `python -m pytest -q` (29 passed); `python -m ruff check .` (passed); FastAPI routes verified with temporary SQLite integration tests. |
 | 7 UI | Not started | |
 | 8 Deployment | Not started | |
 
@@ -51,3 +51,11 @@ None recorded.
 - Untouched test at the selected weight (557 eligible users): Precision@10 0.0264, Recall@10 0.0435, NDCG@10 0.0381, coverage 0.0492, novelty 9.9970.
 - Test NDCG@10 comparison: popularity 0.0317, content 0.0112, collaborative 0.0326, hybrid 0.0381.
 - Saved the full protocol and metric report to `artifacts/ranking_metrics.json`; generated artifacts remain ignored by Git.
+
+## Phase 6 Notes
+- Added documented FastAPI health, title search, similar movie, personalized recommendation and rating routes.
+- Added request/response schemas and SQLAlchemy SQLite persistence. Repeated ratings for the same user/movie update the saved value; invalid ratings and unknown movies are rejected.
+- Personalized recommendations exclude movies from the trained user's history and locally saved ratings. Positive local ratings seed the content/collaborative blend; users without positive ratings receive training-only popularity recommendations.
+- Added integration coverage using temporary SQLite databases; API tests cover all required routes, rating updates, validation and unknown movie handling.
+- Fixed model serialization when training via `python -m` and regenerated local content and collaborative artifacts. A fresh API import successfully loaded both artifacts. Generated model and database files remain ignored by Git.
+- Verification: `.venv/bin/python -m pytest -q` (29 passed) and `.venv/bin/python -m ruff check .` (passed). TestClient reports a Starlette deprecation warning about the installed httpx integration; tests pass and no extra dependency was installed.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -134,6 +135,11 @@ class CollaborativeRecommender:
         self._require_fitted()
         assert self._movie_ids is not None
         return self._movie_ids.copy()
+
+    def seen_movie_ids(self, user_id: int) -> set[int]:
+        """Return a copy of movies observed for a user during model training."""
+        self._require_fitted()
+        return self._seen_by_user.get(int(user_id), set()).copy()
 
     @property
     def training_rating_count(self) -> int:
@@ -378,6 +384,9 @@ class CollaborativeRecommender:
     def save(self, path: Path) -> None:
         """Persist the fitted model and its training configuration."""
         self._require_fitted()
+        if type(self).__module__ == "__main__":
+            sys.modules["recommender.models.collaborative"] = sys.modules["__main__"]
+            type(self).__module__ = "recommender.models.collaborative"
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         joblib.dump({"format_version": MODEL_FORMAT_VERSION, "model": self}, path)
