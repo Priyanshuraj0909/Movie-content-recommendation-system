@@ -1,0 +1,14 @@
+services:
+  movie-recommender:
+    build: .
+    ports:
+      - "8000:8000"
+      - "8501:8501"
+    volumes:
+      - movie-data:/app/data
+      - movie-artifacts:/app/artifacts
+    restart: unless-stopped
+
+volumes:
+  movie-data:
+  movie-artifacts:

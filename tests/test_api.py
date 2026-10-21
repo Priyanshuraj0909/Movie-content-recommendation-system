@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+import backend.app.main as api_main
 from backend.app.main import create_app
 from backend.app.models import UserRating
 from recommender.models.collaborative import CollaborativeRecommender
@@ -103,3 +104,35 @@ def test_rating_input_validation_and_unknown_movie(client: TestClient) -> None:
         "/ratings", json={"user_id": 3, "movie_id": 999, "rating": 4.0}
     )
     assert unknown_movie.status_code == 404
+
+
+def test_default_app_loads_models_during_startup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    movies = pd.DataFrame(
+        {
+            "movieId": [1, 2, 3],
+            "title": ["First Film", "Second Film", "Third Film"],
+            "genres": ["Adventure", "Adventure", "Drama"],
+            "tags_json": ["[]"] * 3,
+        }
+    )
+    ratings = pd.DataFrame(
+        [
+            {"userId": user_id, "movieId": movie_id, "rating": 4.0}
+            for user_id in (1, 2)
+            for movie_id in (1, 2, 3)
+        ]
+    )
+    monkeypatch.setattr(
+        api_main,
+        "_load_default_state",
+        lambda: (
+            ContentRecommender().fit(movies),
+            CollaborativeRecommender(epochs=1).fit(ratings),
+            movies,
+        ),
+    )
+    app = create_app(database_url=f"sqlite:///{tmp_path / 'startup.db'}")
+    with TestClient(app) as startup_client:
+        assert startup_client.get("/health").json() == {"status": "ok", "movies_loaded": 3}

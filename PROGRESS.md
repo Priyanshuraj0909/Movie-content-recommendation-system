@@ -1,5 +1,5 @@
 # Project Progress
-Current phase: Phase 7 — COMPLETE
+Current phase: Phase 8 — COMPLETE
 
 | Phase | Status | Evidence |
 |---|---|---|
@@ -10,7 +10,7 @@ Current phase: Phase 7 — COMPLETE
 | 5 Hybrid & evaluation | Complete | Python 3.12 ARM64; `python -m pytest -q` (25 passed); `python -m ruff check .` (passed); validation-tuned blend evaluated on untouched test split. |
 | 6 API & database | Complete | Python 3.12 ARM64; `python -m pytest -q` (29 passed); `python -m ruff check .` (passed); FastAPI routes verified with temporary SQLite integration tests. |
 | 7 UI | Complete | Python 3.12 ARM64; `python -m pytest -q` (33 passed); `python -m ruff check .` (passed); live Streamlit walkthrough covered search, rating, cold-start, similar films and offline states. |
-| 8 Deployment | Not started | |
+| 8 Deployment | Complete | Python 3.12 ARM64; `python -m pytest -q` (34 passed); `python -m ruff check .` (passed); 34 tests also passed in a fresh-clone simulation with datasets and artifacts excluded. |
 
 ## Decisions
 - Python 3.11/3.12 ARM64 environment preferred.
@@ -66,3 +66,13 @@ None recorded.
 - Added HTTP client tests and Streamlit AppTest flows for discovery/rating, recommendations and similar films.
 - Live walkthrough against the FastAPI service verified search, popularity fallback for a cold-start profile, similar-film results, saving a rating to a temporary SQLite database and excluding the rated movie from the next personalized list. The API-offline message was also verified.
 - Verification: `.venv/bin/python -m pytest -q` (33 passed) and `.venv/bin/python -m ruff check .` (passed). The existing Starlette/httpx deprecation warning remains; no dependency was added.
+
+## Phase 8 Notes
+- Added GitHub Actions CI for Python 3.11 and 3.12, running pytest and Ruff without any dataset or model artifact.
+- Moved default API model/data loading into FastAPI startup. Imports and CI collection work on a fresh checkout; startup reports missing setup files if the local demo has not been prepared.
+- Added `scripts/setup_demo.sh` for reproducible data preparation, model training and offline ranking evaluation. Added optional Docker Compose with separate API/UI ports and named volumes for generated data and ratings.
+- Verified the lazy API startup with the trained local artifacts; `/health` returned `{"status":"ok","movies_loaded":9742}`. Missing model/data files now point to the setup command.
+- Added architecture diagram, model card, benchmark script and measured performance notes, and interview Q&A.
+- Benchmark run on macOS 27.0.1 ARM64 with Python 3.12.7: content and collaborative artifact loads 0.046s and 0.030s; warm title search p95 1.219ms; similar movie p95 0.867ms; 1,000 predictions p95 0.273ms; full-catalog top-10 ranking p95 2.876ms. Measurements exclude network and concurrency; see `docs/PERFORMANCE.md`.
+- Verification: `.venv/bin/python -m pytest -q` (34 passed), `.venv/bin/python -m ruff check .` (passed), shell syntax and demo setup passed. A temporary fresh-clone copy without `data/` or `artifacts/` also passed all 34 tests after the CI editable install.
+- Docker build was not run because this machine has no Docker, Podman or nerdctl CLI. Docker support is optional; source and compose files are included but need a Docker host to verify.

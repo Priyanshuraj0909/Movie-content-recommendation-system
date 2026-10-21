@@ -1,6 +1,7 @@
 """FastAPI application for searching movies and serving recommendations."""
 
 from collections.abc import Iterable
+from contextlib import asynccontextmanager
 from typing import Annotated
 
 import numpy as np
@@ -34,6 +35,15 @@ def _normalize(scores: np.ndarray) -> np.ndarray:
 
 def _load_default_state() -> tuple[ContentRecommender, CollaborativeRecommender, pd.DataFrame]:
     """Load artifacts produced by the Phase 3–5 training commands."""
+    required_files = (
+        ARTIFACTS_DIR / "content_recommender.joblib",
+        ARTIFACTS_DIR / "collaborative_recommender.joblib",
+        PROCESSED_DATA_DIR / "movies_with_tags.csv",
+    )
+    missing = [path for path in required_files if not path.is_file()]
+    if missing:
+        paths = ", ".join(str(path) for path in missing)
+        raise RuntimeError(f"Demo files are missing ({paths}). Run `bash scripts/setup_demo.sh`.")
     content = ContentRecommender.load(ARTIFACTS_DIR / "content_recommender.joblib")
     collaborative = CollaborativeRecommender.load(
         ARTIFACTS_DIR / "collaborative_recommender.joblib"
@@ -50,27 +60,47 @@ def create_app(
     database_url: str | None = None,
 ) -> FastAPI:
     """Build an app, optionally injecting fitted models and a test database."""
-    if content_model is None or collaborative_model is None or movies is None:
-        loaded_content, loaded_collaborative, loaded_movies = _load_default_state()
-        content_model = content_model or loaded_content
-        collaborative_model = collaborative_model or loaded_collaborative
-        movies = movies if movies is not None else loaded_movies
-    assert content_model is not None and collaborative_model is not None and movies is not None
-
-    movie_table = movies.loc[:, ["movieId", "title", "genres"]].copy()
-    movie_table["movieId"] = pd.to_numeric(movie_table["movieId"], errors="raise").astype(int)
-    movie_table["title"] = movie_table["title"].fillna("").astype(str)
-    movie_table["genres"] = movie_table["genres"].fillna("").astype(str)
-    movie_table = movie_table.drop_duplicates("movieId").set_index("movieId", drop=False)
+    movie_table: pd.DataFrame | None = None
+    if movies is not None:
+        movie_table = movies.loc[:, ["movieId", "title", "genres"]].copy()
+        movie_table["movieId"] = pd.to_numeric(movie_table["movieId"], errors="raise").astype(int)
+        movie_table["title"] = movie_table["title"].fillna("").astype(str)
+        movie_table["genres"] = movie_table["genres"].fillna("").astype(str)
+        movie_table = movie_table.drop_duplicates("movieId").set_index("movieId", drop=False)
     factory = make_session_factory(
         database_url or sqlite_url(ARTIFACTS_DIR / "recommender.db")
     )
 
-    app = FastAPI(title="Movie Recommendation API", version="0.1.0")
-    app.state.content_model = content_model
-    app.state.collaborative_model = collaborative_model
-    app.state.movies = movie_table
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        nonlocal content_model, collaborative_model, movie_table
+        if content_model is None or collaborative_model is None or movie_table is None:
+            loaded_content, loaded_collaborative, loaded_movies = _load_default_state()
+            content_model = content_model or loaded_content
+            collaborative_model = collaborative_model or loaded_collaborative
+            if movie_table is None:
+                movie_table = loaded_movies.loc[:, ["movieId", "title", "genres"]].copy()
+                movie_table["movieId"] = pd.to_numeric(
+                    movie_table["movieId"], errors="raise"
+                ).astype(int)
+                movie_table["title"] = movie_table["title"].fillna("").astype(str)
+                movie_table["genres"] = movie_table["genres"].fillna("").astype(str)
+                movie_table = movie_table.drop_duplicates("movieId").set_index(
+                    "movieId", drop=False
+                )
+        assert content_model is not None and collaborative_model is not None
+        assert movie_table is not None
+        app.state.content_model = content_model
+        app.state.collaborative_model = collaborative_model
+        app.state.movies = movie_table
+        yield
+
+    app = FastAPI(title="Movie Recommendation API", version="0.1.0", lifespan=lifespan)
     app.state.session_factory = factory
+    if content_model is not None and collaborative_model is not None and movie_table is not None:
+        app.state.content_model = content_model
+        app.state.collaborative_model = collaborative_model
+        app.state.movies = movie_table
 
     def session_dependency() -> Iterable[Session]:
         yield from get_session(factory)
