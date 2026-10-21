@@ -5,6 +5,25 @@ collaborative, and hybrid movie recommendations. It is designed to run on Apple
 Silicon and uses MovieLens latest-small as the initial dataset. MovieLens genres
 and tags are treated as metadata, not plot descriptions.
 
+## Live app
+
+Open the deployed CineMatch AI web app at **<https://cinematch-king-09.vercel.app>**.
+The Vercel deployment serves the browser UI and the FastAPI endpoints under the
+same domain. The deployed backend health check is available at
+<https://cinematch-king-09.vercel.app/api/health> and reports the loaded movie
+count.
+
+The browser app includes Home, Explore, AI picks, and Watchlist views. Search for
+a title such as `Matrix`; select a result to see its catalog details or discover
+similar films. Movie cards let you save a half-star rating for the current
+profile. Ratings go to the API and hosted PostgreSQL database. The watchlist and
+profile ID are stored in the current browser, so they do not sync across
+browsers or devices. There is no account login in this MVP.
+
+The MovieLens catalog provides titles, genres, ratings, tags, and IDs. CineMatch
+uses original CSS artwork; it does not currently include licensed posters, plot
+summaries, cast lists, or trailers.
+
 ## Requirements
 
 - macOS on Apple Silicon or another supported platform
@@ -207,25 +226,43 @@ needed for CI.
 
 ## Deploy to Vercel
 
-The Vercel deployment uses the cinematic static browser frontend in
-`frontend/web/` and the existing FastAPI backend as a Python service. It
-includes title search with suggestions, profile-based recommendations, similar
-film discovery, half-star ratings and a browser-local watchlist. Watchlist
-entries stay in the current browser; ratings are stored by the hosted API in
-PostgreSQL. Vercel builds the MovieLens demo data and models from the public
-GroupLens archive; generated files remain out of Git.
+The production project is deployed at
+<https://cinematch-king-09.vercel.app>. The cinematic static browser frontend
+lives in `frontend/web/`; the existing FastAPI backend runs as a Python service.
+The browser sends same-origin requests to `/api/*`. The Vercel build downloads
+MovieLens latest-small and prepares the data and model artifacts; generated
+files remain out of Git.
+
+The deployed API routes are available below (the examples can be opened in a
+browser):
+
+- [Health](https://cinematch-king-09.vercel.app/api/health)
+- [Search for Matrix](https://cinematch-king-09.vercel.app/api/movies/search?q=matrix)
+- [Similar films for The Matrix](https://cinematch-king-09.vercel.app/api/recommendations/similar/2571?limit=5)
+- [Popular picks for profile 123456789](https://cinematch-king-09.vercel.app/api/recommendations/users/123456789?limit=10)
+
+To set up or redeploy this project on Vercel, connect the GitHub repository,
+configure `DATABASE_URL` as a Vercel environment secret for Preview and
+Production, then push to `main`. The database URL must never be committed.
+Vercel builds the API and frontend together. Hosted ratings use PostgreSQL;
+SQLite is for local development only because serverless filesystems are
+temporary.
+
+Production checks verified the page, JavaScript, stylesheet, health, search,
+similar-film, and recommendation GET routes return HTTP 200. Rating create and
+update are covered by local API integration tests; a rating POST has not been
+run against production.
 
 Movie cards use original CSS artwork as a fallback. MovieLens supplies titles,
 genres, ratings and tags, but this project does not currently provide licensed
 poster URLs, plot summaries, cast or trailer links, so the UI does not invent
 those details.
 
-`vercel.json` defines the two services and sends `/api/*` requests to FastAPI.
-Before deploying, connect a PostgreSQL database and set its `DATABASE_URL` as a
-Vercel environment secret for Preview and Production. Deployments intentionally
-fail at API import if that variable is missing, since serverless filesystems do
-not provide persistent SQLite storage. After connecting the GitHub repository
-to the Vercel project, pushes to `main` deploy automatically.
+`vercel.json` defines the frontend and API services and routes `/api/*` requests
+to FastAPI. Deployments require `DATABASE_URL`; they intentionally fail at API
+startup if it is missing rather than silently writing ratings to ephemeral
+storage. Once the repository is connected, pushes to `main` deploy
+automatically.
 
 ## Optional Docker demo
 
