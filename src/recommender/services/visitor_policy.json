@@ -1,0 +1,36 @@
+{
+  "format_version": 1,
+  "seed": 20261031,
+  "selection": "validation users only; NDCG@10 then recall then simplicity",
+  "semantic_available_during_selection": true,
+  "policies": {
+    "1": {
+      "popularity": 0.85,
+      "content": 0.15,
+      "collaborative": 0,
+      "semantic": 0,
+      "diversity": 0.0
+    },
+    "3": {
+      "popularity": 0.85,
+      "content": 0.15,
+      "collaborative": 0,
+      "semantic": 0,
+      "diversity": 0.0
+    },
+    "5": {
+      "popularity": 0.85,
+      "content": 0.15,
+      "collaborative": 0,
+      "semantic": 0,
+      "diversity": 0.0
+    },
+    "10": {
+      "popularity": 0.7,
+      "content": 0.15,
+      "collaborative": 0.1,
+      "semantic": 0.05,
+      "diversity": 0.0
+    }
+  }
+}

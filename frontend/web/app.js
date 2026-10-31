@@ -7,6 +7,7 @@ const SESSION_KEY = "cinematch.privateProfile";
 let privateProfile = null;
 try { privateProfile = JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch { /* Create a profile below. */ }
 let profileId = privateProfile?.user_id || null;
+let profileGeneration = 0;
 let currentSearchResults = [];
 let activeGenre = "";
 let searchTimer;
@@ -14,27 +15,69 @@ let searchSequence = 0;
 let toastTimer;
 let activeMovie = null;
 let ratingCount = 0;
+let ratedMovies = new Map();
+let movieStates = new Map();
+let pickMode = "balanced";
+let libraryOffset = 0;
+let librarySequence = 0;
+let onboardingSequence = 0;
+let homeSequence = 0;
+let picksSequence = 0;
 const externalRatings = new Map();
 
+function readStoredList(key) {
+  try { const value = JSON.parse(localStorage.getItem(key) || "[]"); return Array.isArray(value) ? value : []; }
+  catch { return []; }
+}
+
 async function initializeProfile() {
+  const generation = profileGeneration;
   if (!privateProfile?.token || !Number.isSafeInteger(privateProfile.user_id)) {
-    privateProfile = await request("/profiles", { method: "POST" });
-    profileId = privateProfile.user_id;
-    localStorage.setItem(SESSION_KEY, JSON.stringify(privateProfile));
+    const created = await request("/profiles", { method: "POST" });
+    if (generation !== profileGeneration) return;
+    privateProfile = created;
+    profileId = created.user_id;
+    localStorage.setItem(SESSION_KEY, JSON.stringify(created));
   }
-  const history = await request("/profiles/" + profileId + "/ratings");
+  const currentId = profileId;
+  const headers = { "X-Profile-Token": privateProfile.token };
+  const [history, preferences, remote] = await Promise.all([
+    request("/profiles/" + currentId + "/ratings", { headers }),
+    request("/profiles/" + currentId + "/preferences", { headers }),
+    request("/profiles/" + currentId + "/watchlist", { headers }),
+  ]);
+  if (generation !== profileGeneration) return;
+  ratedMovies = new Map(history.map((row) => [Number(row.movie_id), Number(row.rating)]));
+  movieStates = new Map(preferences.map((row) => [Number(row.movie_id), row.state]));
   ratingCount = history.length;
   updateOnboarding();
-  const remote = await request("/profiles/" + profileId + "/watchlist");
-  // Preserve and import an existing browser watchlist; never claim old ratings.
-  for (const movie of getWatchlist().slice(0, 500)) {
-    if (!remote.some((entry) => entry.movie_id === movie.movie_id)) {
-      await request("/profiles/" + profileId + "/watchlist", {
+  const ownerKey = "cinematch.watchlistImportOwner";
+  const doneKey = "cinematch.watchlistImportSaved";
+  const outboxKey = WATCHLIST_KEY + ".pending." + currentId;
+  if (!localStorage.getItem(ownerKey)) localStorage.setItem(ownerKey, String(currentId));
+  let pending = readStoredList(outboxKey);
+  if (!localStorage.getItem(doneKey) && localStorage.getItem(ownerKey) === String(currentId)) {
+    pending = [...pending, ...readStoredList(WATCHLIST_KEY)];
+  }
+  pending = pending.filter((movie, i, entries) => Number.isSafeInteger(movie.movie_id) && entries.findIndex((entry) => entry.movie_id === movie.movie_id) === i);
+  const remaining = [];
+  for (let i = 0; i < pending.length; i += 1) {
+    if (generation !== profileGeneration) return;
+    const movie = pending[i];
+    if (remote.some((entry) => entry.movie_id === movie.movie_id)) continue;
+    if (i >= 500) { remaining.push(...pending.slice(i)); break; }
+    try {
+      await request("/profiles/" + currentId + "/watchlist", { headers,
         method: "PUT", body: JSON.stringify({ movie_id: movie.movie_id }),
       });
       remote.push(movie);
-    }
+    } catch { remaining.push(...pending.slice(i)); break; }
   }
+  if (generation !== profileGeneration) return;
+  // Remote storage is authoritative; only a preserved migration outbox is replayed.
+  localStorage.setItem(outboxKey, JSON.stringify(remaining));
+  if (localStorage.getItem(ownerKey) === String(currentId)) localStorage.setItem(doneKey, "1");
+  remaining.forEach((movie) => { if (!remote.some((entry) => entry.movie_id === movie.movie_id)) remote.push(movie); });
   saveWatchlist(remote);
   $("#profile-label").textContent = "Private";
 }
@@ -43,6 +86,9 @@ function updateOnboarding() {
   $("#taste-progress").textContent = ratingCount >= 5
     ? "Your taste profile is taking shape. Keep rating to refine your picks."
     : "Start with 5 films you know · " + ratingCount + " rated";
+  $("#onboarding-progress").value = Math.min(ratingCount, 5);
+  $("#onboarding-progress-label").textContent = Math.min(ratingCount, 5) + " of 5 films rated";
+  $("#onboarding-hint").textContent = ratingCount >= 5 ? "Your first five are saved. Explore your picks whenever you’re ready." : "Every rating helps describe your taste. Fewer than five is fine too.";
 }
 
 async function request(path, options = {}) {
@@ -63,7 +109,7 @@ async function request(path, options = {}) {
 
 function getWatchlist() {
   try {
-    const value = JSON.parse(localStorage.getItem(WATCHLIST_KEY) || "[]");
+    const value = JSON.parse(localStorage.getItem(WATCHLIST_KEY + "." + profileId) || "[]");
     return Array.isArray(value) ? value : [];
   } catch {
     return [];
@@ -71,7 +117,9 @@ function getWatchlist() {
 }
 
 function saveWatchlist(items) {
-  localStorage.setItem(WATCHLIST_KEY, JSON.stringify(items));
+  localStorage.setItem(WATCHLIST_KEY + "." + profileId, JSON.stringify(items));
+  const outbox = WATCHLIST_KEY + ".pending." + profileId;
+  localStorage.setItem(outbox, JSON.stringify(readStoredList(outbox).filter((movie) => items.some((entry) => entry.movie_id === movie.movie_id))));
   updateWatchlistCount();
 }
 
@@ -201,6 +249,8 @@ function makeRatingControls(movie) {
     option.textContent = value.toFixed(1) + " ★";
     select.append(option);
   }
+  const existingRating = movie.rating ?? ratedMovies.get(Number(movie.movie_id));
+  if (Number.isFinite(existingRating)) select.value = String(existingRating);
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = "Save";
@@ -219,12 +269,11 @@ function makeRatingControls(movie) {
         method: "POST",
         body: JSON.stringify({ user_id: profileId, movie_id: Number(movie.movie_id), rating }),
       });
-      const history = await request("/profiles/" + profileId + "/ratings");
-      ratingCount = history.length;
+      ratedMovies.set(Number(movie.movie_id), rating);
+      ratingCount = ratedMovies.size;
       updateOnboarding();
-      showToast("Rating saved. Your next picks will learn from it.");
-      if ($("#page-recommendations").classList.contains("active")) loadRecommendations();
-      if ($("#page-home").classList.contains("active")) loadHomePicks();
+      showToast("Rating saved. Your picks now use this feedback.");
+      refreshTasteViews();
     } catch (error) {
       showToast(error.message, true);
     } finally {
@@ -291,7 +340,7 @@ function makeMovieCard(movie) {
   explanation.className = "recommendation-reason";
   explanation.textContent = movie.reason || "";
   explanation.hidden = !movie.reason;
-  info.append(title, genres, ratingLine, explanation, bottom, makeRatingControls(movie));
+  info.append(title, genres, ratingLine, explanation, bottom, makeRatingControls(movie), makeStateControls(movie));
   card.append(posterWrap, info);
   return card;
 }
@@ -335,15 +384,13 @@ function renderCardRating(container, movieId, data) {
 async function loadCardRatings(container, movies) {
   const ids = [...new Set(movies.map((movie) => Number(movie.movie_id)).filter(Number.isSafeInteger))];
   const missing = ids.filter((id) => !externalRatings.has(id));
-  if (missing.length) {
+  for (let offset = 0; offset < missing.length; offset += 30) {
     try {
       const params = new URLSearchParams();
-      missing.forEach((id) => params.append("movie_ids", String(id)));
+      missing.slice(offset, offset + 30).forEach((id) => params.append("movie_ids", String(id)));
       const values = await request("/movies/external-ratings?" + params.toString());
       values.forEach((value) => externalRatings.set(Number(value.movie_id), value));
-    } catch {
-      return;
-    }
+    } catch { /* Keep movie discovery usable when a provider is unavailable. */ }
   }
   ids.forEach((id) => {
     const value = externalRatings.get(id);
@@ -403,25 +450,33 @@ async function checkHealth() {
 }
 
 async function loadHomePicks() {
+  const sequence = ++homeSequence;
+  const generation = profileGeneration;
   const container = $("#home-picks");
   try {
     await profileReady;
     const movies = await request("/recommendations/users/" + profileId + "?limit=12");
+    if (sequence !== homeSequence || generation !== profileGeneration) return;
     renderMovies(container, movies, "Let’s find your first favorite.", "Rate a film you love to shape recommendations for this profile.");
   } catch (error) {
+    if (sequence !== homeSequence || generation !== profileGeneration) return;
     showEmpty(container, "Your picks couldn’t load.", error.message, true);
   }
 }
 
 async function loadRecommendations() {
+  const sequence = ++picksSequence;
+  const generation = profileGeneration;
   const container = $("#personal-results");
   container.innerHTML = '<div class="skeleton-grid"><span></span><span></span><span></span><span></span><span></span></div>';
   $("#profile-label").textContent = "Private";
   try {
     await profileReady;
-    const movies = await request("/recommendations/users/" + profileId + "?limit=30");
+    const movies = await request("/recommendations/users/" + profileId + "?limit=30&mode=" + pickMode);
+    if (sequence !== picksSequence || generation !== profileGeneration) return;
     renderMovies(container, movies, "Your next story is one rating away.", "Explore the collection and rate a film you already love.");
   } catch (error) {
+    if (sequence !== picksSequence || generation !== profileGeneration) return;
     showEmpty(container, "Recommendations aren’t available right now.", error.message, true);
   }
 }
@@ -613,6 +668,7 @@ function showPage(page) {
   if (page === "home") loadHomePicks();
   if (page === "recommendations") loadRecommendations();
   if (page === "watchlist") renderWatchlist();
+  if (page === "library") loadLibrary();
   if (page === "explore") setTimeout(() => $("#movie-search").focus({ preventScroll: true }), 80);
 }
 
@@ -640,6 +696,7 @@ $("#movie-search").addEventListener("input", () => {
 $("#movie-search").addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     event.preventDefault();
+    clearTimeout(searchTimer);
     runSearch(false);
   } else if (event.key === "Escape") {
     $("#search-suggestions").hidden = true;
@@ -660,24 +717,29 @@ $("#profile-form").addEventListener("submit", async (event) => {
     showToast("Enter the complete private recovery code.", true);
     return;
   }
-  const previous = privateProfile;
-  privateProfile = { user_id: Number(match[1]), token: match[2] };
+  const candidate = { user_id: Number(match[1]), token: match[2] };
+  const headers = { "X-Profile-Token": candidate.token };
   try {
-    await request("/profiles/" + privateProfile.user_id + "/ratings");
-    profileId = privateProfile.user_id;
-    // Keep each profile's watchlist separate when restoring another profile.
-    const list = await request("/profiles/" + profileId + "/watchlist");
-    localStorage.setItem(SESSION_KEY, JSON.stringify(privateProfile));
+    // Validate every remote read before changing the active identity or cache.
+    const [ratings, list, preferences] = await Promise.all([
+      request("/profiles/" + candidate.user_id + "/ratings", { headers }),
+      request("/profiles/" + candidate.user_id + "/watchlist", { headers }),
+      request("/profiles/" + candidate.user_id + "/preferences", { headers }),
+    ]);
+    localStorage.setItem(SESSION_KEY, JSON.stringify(candidate));
+    profileGeneration += 1;
+    privateProfile = candidate;
+    profileId = candidate.user_id;
+    ratedMovies = new Map(ratings.map((row) => [Number(row.movie_id), Number(row.rating)]));
+    movieStates = new Map(preferences.map((row) => [Number(row.movie_id), row.state]));
+    ratingCount = ratings.length;
+    updateOnboarding();
     saveWatchlist(list);
-    profileReady = initializeProfile();
-    await profileReady;
+    profileReady = Promise.resolve();
     $("#profile-dialog").close();
-    loadHomePicks();
-    loadRecommendations();
+    refreshTasteViews();
     showToast("Private profile restored.");
   } catch (error) {
-    privateProfile = previous;
-    profileId = previous?.user_id || null;
     showToast(error.message, true);
   }
 });
@@ -768,3 +830,136 @@ if (tmdbLogo) {
   tmdbLogo.addEventListener("error", () => { tmdbLogo.hidden = true; });
   if (tmdbLogo.complete && !tmdbLogo.naturalWidth) tmdbLogo.hidden = true;
 }
+
+function refreshTasteViews() {
+  if ($("#page-home").classList.contains("active")) loadHomePicks();
+  if ($("#page-recommendations").classList.contains("active")) loadRecommendations();
+  if ($("#page-library").classList.contains("active")) loadLibrary();
+  if ($("#onboarding-dialog").open) loadOnboardingMovies();
+}
+
+function makeStateControls(movie) {
+  const controls = document.createElement("div");
+  controls.className = "movie-feedback";
+  const state = movieStates.get(Number(movie.movie_id)) || movie.state || "none";
+  const actions = state === "none"
+    ? [["watched", "Watched", "Mark " + movie.title + " watched"], ["not_interested", "Not interested", "Not interested in " + movie.title]]
+    : [["none", state === "watched" ? "Undo watched" : "Undo not interested", "Undo feedback for " + movie.title]];
+  actions.forEach(([next, label, accessible]) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.setAttribute("aria-label", accessible);
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        await profileReady;
+        await request("/profiles/" + profileId + "/preferences", {
+          method: "PUT", body: JSON.stringify({ movie_id: Number(movie.movie_id), state: next }),
+        });
+        movieStates.set(Number(movie.movie_id), next);
+        movie.state = next;
+        controls.replaceWith(makeStateControls(movie));
+        showToast(next === "none" ? "Feedback cleared. Your ratings are unchanged." : next === "watched" ? "Marked watched. It will stay out of your picks." : "Saved. This film will stay out of your picks.");
+        refreshTasteViews();
+      } catch (error) { showToast(error.message, true); }
+      finally { button.disabled = false; }
+    });
+    controls.append(button);
+  });
+  return controls;
+}
+
+function makeTasteEntry(movie) {
+  const entry = document.createElement("article");
+  entry.className = "taste-entry";
+  entry.dataset.movieId = String(movie.movie_id);
+  const text = document.createElement("div");
+  const title = document.createElement("h3");
+  title.textContent = movie.title;
+  const summary = document.createElement("p");
+  const labels = [];
+  if (Number.isFinite(movie.rating)) labels.push("Your rating: " + movie.rating.toFixed(1) + " ★");
+  if (movie.state === "watched") labels.push("Marked watched");
+  if (movie.state === "not_interested") labels.push("Not interested");
+  summary.textContent = labels.join(" · ") || getGenres(movie).join(" · ");
+  text.append(title, summary);
+  const actions = document.createElement("div");
+  actions.className = "taste-entry-actions";
+  if (movie.available !== false) actions.append(makeRatingControls(movie));
+  if (movie.available !== false || movie.state !== "none") actions.append(makeStateControls(movie));
+  entry.append(text, actions);
+  return entry;
+}
+
+async function loadLibrary(append = false) {
+  const sequence = ++librarySequence;
+  const container = $("#library-results");
+  const more = $("#library-more");
+  more.disabled = true;
+  if (!append) {
+    libraryOffset = 0;
+    container.textContent = "Loading your taste profile…";
+  }
+  try {
+    await profileReady;
+    const params = new URLSearchParams({ view: $("#library-filter").value, limit: "20", offset: String(libraryOffset) });
+    const data = await request("/profiles/" + profileId + "/library?" + params);
+    if (sequence !== librarySequence) return;
+    ratingCount = data.rated_count;
+    updateOnboarding();
+    $("#library-summary").textContent = data.rated_count + " rated · " + data.watched_count + " marked watched · " + data.dismissed_count + " not interested";
+    if (!append) container.replaceChildren();
+    data.items.forEach((movie) => container.append(makeTasteEntry(movie)));
+    libraryOffset += data.items.length;
+    more.hidden = libraryOffset >= data.total;
+    if (!data.total) showEmpty(container, "Your taste starts here.", "Rate a familiar film or mark something watched. Your choices will be waiting here.");
+  } catch (error) {
+    if (sequence === librarySequence) showEmpty(container, "Your taste profile couldn’t load.", error.message, true);
+  } finally { if (sequence === librarySequence) more.disabled = false; }
+}
+
+async function loadOnboardingMovies() {
+  const sequence = ++onboardingSequence;
+  const container = $("#onboarding-results");
+  const query = $("#onboarding-search").value.trim();
+  container.textContent = "Finding familiar stories…";
+  try {
+    await profileReady;
+    const films = query
+      ? await request("/movies/search?" + new URLSearchParams({ q: query, limit: "20" }))
+      : await request("/recommendations/users/" + profileId + "?limit=12");
+    if (sequence !== onboardingSequence) return;
+    const available = films.filter((movie) => !ratedMovies.has(Number(movie.movie_id)) && (!movieStates.get(Number(movie.movie_id)) || movieStates.get(Number(movie.movie_id)) === "none"));
+    container.replaceChildren();
+    available.slice(0, 8).forEach((movie) => container.append(makeTasteEntry(movie)));
+    if (!available.length) showEmpty(container, "Try another familiar title.", "Already rated films are saved in Your taste. Search for another film you know.");
+  } catch (error) {
+    if (sequence === onboardingSequence) showEmpty(container, "Films couldn’t load.", error.message, true);
+  }
+}
+
+$$("[data-start-onboarding]").forEach((button) => button.addEventListener("click", () => {
+  updateOnboarding();
+  $("#onboarding-dialog").showModal();
+  loadOnboardingMovies();
+}));
+$("#close-onboarding").addEventListener("click", () => $("#onboarding-dialog").close());
+$("#finish-onboarding").addEventListener("click", () => {
+  $("#onboarding-dialog").close();
+  showPage("recommendations");
+});
+$("#onboarding-search-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  loadOnboardingMovies();
+});
+$("#library-filter").addEventListener("change", () => loadLibrary());
+$("#library-more").addEventListener("click", () => loadLibrary(true));
+$$("[data-pick-mode]").forEach((button) => button.addEventListener("click", () => {
+  pickMode = button.dataset.pickMode;
+  $$("[data-pick-mode]").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
+  $("#pick-mode-caption").textContent = pickMode === "discovery"
+    ? "A wider mix of story themes inspired by your taste."
+    : "Community favorites shaped by your ratings.";
+  loadRecommendations();
+}));

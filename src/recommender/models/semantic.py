@@ -71,7 +71,35 @@ class SemanticIndex:
             raise ValueError("Invalid semantic index shape")
         if not np.isfinite(self.embeddings).all():
             raise ValueError("Non-finite semantic embeddings")
+        if len(set(self.movie_ids.tolist())) != len(self.movie_ids):
+            raise ValueError("Duplicate semantic movie IDs")
+        self._positions = {int(mid): position for position, mid in enumerate(self.movie_ids)}
         self.encoder = encoder or SentenceEncoder(self.directory)
+
+    def score_preferences(self, ratings: dict[int, float], candidate_ids) -> np.ndarray:
+        """Compare stored plot vectors with a signed visitor preference profile.
+
+        Missing descriptions contribute zero, never an invented embedding. The
+        encoder is not called: all film vectors were prepared offline.
+        """
+        profile = np.zeros(self.embeddings.shape[1], dtype=np.float32)
+        for mid, rating in ratings.items():
+            position = self._positions.get(int(mid))
+            if position is None or 2.5 < rating < 4:
+                continue
+            weight = rating - 3 if rating >= 4 else 0.5 * (rating - 3)
+            profile += weight * self.embeddings[position]
+        norm = np.linalg.norm(profile)
+        candidates = list(candidate_ids)
+        scores = np.zeros(len(candidates), dtype=np.float64)
+        if norm == 0:
+            return scores
+        similarities = self.embeddings @ (profile / norm)
+        for i, mid in enumerate(candidates):
+            position = self._positions.get(int(mid))
+            if position is not None:
+                scores[i] = float(similarities[position])
+        return scores
 
     def search(self, query: str, *, limit=20, allowed_ids=None):
         vector = self.encoder.encode([query])[0]

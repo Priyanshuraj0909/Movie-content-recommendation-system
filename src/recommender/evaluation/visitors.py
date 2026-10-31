@@ -12,7 +12,7 @@ from recommender.data.movielens import _movie_features, training_tags
 from recommender.evaluation.ranking import _ndcg
 from recommender.models.collaborative import CollaborativeRecommender
 from recommender.models.content import ContentRecommender
-from recommender.services.visitor import recommend_visitor
+from recommender.services.visitor import recommend_legacy_visitor as recommend_visitor
 
 
 def evaluate_visitors(training, interactions, movies, *, seed=42, counts=(1, 3, 5, 10)):

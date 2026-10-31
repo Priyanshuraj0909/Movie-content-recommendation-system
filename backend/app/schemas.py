@@ -1,5 +1,7 @@
 """Typed API request and response schemas."""
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -61,3 +63,22 @@ class RatingCreate(BaseModel):
 
 class RatingResponse(RatingCreate):
     model_config = ConfigDict(from_attributes=True)
+
+
+class PreferenceChange(BaseModel):
+    movie_id: int = Field(gt=0)
+    state: Literal["watched", "not_interested", "none"]
+
+
+class LibraryMovie(MovieResponse):
+    rating: float | None = None
+    state: Literal["watched", "not_interested", "none"] = "none"
+    available: bool = True
+
+
+class LibraryResponse(BaseModel):
+    items: list[LibraryMovie]
+    total: int
+    rated_count: int
+    watched_count: int
+    dismissed_count: int

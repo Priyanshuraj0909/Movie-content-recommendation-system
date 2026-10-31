@@ -35,3 +35,10 @@ Repeatable runs, pinned dependency ranges, unit and integration tests, linting, 
 A new developer can set up locally; models train and evaluate; user can search/rate/get recommendations; tests pass; architecture and metrics are documented; app can be demonstrated on an M2 Mac.
 ## Scope control
 No scraping, paid APIs, production auth or distributed training in the initial MVP.
+
+## Authorized v0.3 iteration
+The owner authorized the next upgrade and deployment on 2026-10-31. Follow
+Phases 14 and 15: validation-selected visitor policies with disjoint user cohorts,
+plot preference profiles, a five-film onboarding flow, editable library and
+independent reversible movie states. Keep existing profiles and feedback intact.
+Do not confuse successful deployment status with verified hosted persistence.

@@ -37,8 +37,10 @@ mapped to MovieLens user factors or training histories.
 The visitor ranker estimates a bias and latent vector through a small regularized
 least-squares solve against fixed item factors. Content preferences include
 negative signals. The shortlist uses bounded genre diversification and returns
-factual reasons. The visitor policy and its heuristic weights are shared with
-the unseen-user evaluator, rather than inferred from known-user metrics.
+factual reasons. The scorer and frozen validation-selected policy are shared with the visitor
+evaluator. Policies are chosen before evaluating a disjoint test cohort. Plot
+profiles use stored embeddings without additional encoder inference. Explicit
+watched/not-interested states are stored separately and applied as exclusions.
 
 Semantic search covers verified plot matches only. The 384-dimensional vectors
 are L2 normalized, and structured filters exclude missing runtime/language

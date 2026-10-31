@@ -24,3 +24,6 @@ mlruns/
 mlartifacts/
 playwright-report/
 test-results/
+/build/
+/dist/
+*.whl

@@ -39,8 +39,9 @@ the popularity baseline.
 ## How are watched items excluded?
 
 The known-user benchmark excludes each MovieLens user's training history.
-Application visitors are a separate identity space: serving excludes only that
-visitor's submitted ratings, never an unrelated benchmark user's history.
+Application visitors are a separate identity space: serving excludes that
+visitor's submitted ratings and explicit watched/dismissed states, never an
+unrelated benchmark user's history.
 
 ## Why store ratings in SQLite?
 
@@ -72,9 +73,11 @@ service-level objectives.
 
 ## What did the new experiments teach you?
 
-Correcting tag availability lowered the old hybrid result. The current visitor
-heuristic improves catalog breadth but trails popularity on held-out visitor
-accuracy. An experimental BPR baseline did better on the known-user task, but
+Correcting tag availability lowered the old hybrid result. The historical v0.2 visitor
+heuristic improved breadth but trailed popularity. The v0.3 default was selected
+on separate validation users, then scored about 5% above popularity in observed
+five-rating NDCG on a new held-out user partition. This is not evidence of
+statistical significance or production quality. An experimental BPR baseline did better on the known-user task, but
 that does not establish that it should replace the visitor model. These results
 are reported separately with their actual candidate sets and limitations.
 
@@ -91,3 +94,10 @@ A small ridge-regression solve estimates a visitor bias and latent vector from
 submitted ratings against fixed movie factors. It updates no global model arrays
 and reads no MovieLens user identity. The private profile's ID is used only for
 application persistence and ownership checks.
+
+## How are watched films different from low ratings?
+
+Watched and not-interested are reversible exclusions stored independently of
+numeric ratings. They do not insert fake half-star feedback. Clearing a state
+keeps existing ratings and watchlists intact. The private taste library exposes
+these distinctions and allows rating edits.

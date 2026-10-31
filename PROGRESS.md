@@ -1,5 +1,5 @@
 # Project Progress
-Current phase: Release verification — Phase 9 hosted gate pending; Phases 10–13 locally verified
+Current phase: v0.3 release verification — Phases 14–15 locally verified; protected hosted gate pending
 
 | Phase | Status | Evidence |
 |---|---|---|
@@ -59,6 +59,53 @@ NDCG@10 0.0472 but remains an optional research baseline. See `docs/MODEL_CARD.m
 The complete semantic setup and research artifacts remain ignored. pgvector is
 deferred because exact NumPy retrieval is sufficient for the present index;
 no paid database, new vector service or external credential was created.
+
+## Phase 14 — validation-selected visitor policy, 2026-10-31
+
+- Added shared component scoring, exact plot-preference scoring, balanced and
+  discovery policies, and cached catalog metadata for serving.
+- Selection used 366 fitting users and 122 validation users, then froze and
+  exported all policies before scoring 122 disjoint test users. Static plots
+  are not historically filtered; this is one partition of an explored dataset.
+- At five onboarding ratings: selected NDCG@10 0.2989, popularity 0.2847,
+  v0.2 policy 0.0826 on the same users/candidates. The observed gain over
+  popularity is about 5%; statistical significance has not been established.
+- Discovery mode had NDCG@10 0.2648 and coverage 1.53%, versus selected
+  coverage 0.51%. Both modes retain factual explanations and seen-item exclusion.
+- The versioned policy JSON contains configuration only; data, embeddings and
+  full experiment reports remain ignored.
+- Verification: pytest 78 passed; Ruff passed. New tests cover disjoint user
+  partitions, test-feedback changes not influencing exported policies, exact
+  semantic preference scoring, missing plots, and evaluation/serving parity.
+- Hosted rating/database verification remains blocked by Vercel Authentication.
+
+## Phase 15 — taste building and feedback, 2026-10-31
+
+- Added five-film onboarding with title search, progress and early exit; For you
+  and Discover more controls; and a paginated private taste library with rating edits.
+- Added reversible watched/not-interested states. These exclude individual films
+  without inserting artificial star ratings. Clearing a state keeps ratings and
+  watchlists unchanged.
+- Migration 0002 adds only the new preference table. Executed preservation tests
+  retain v0.2 profiles, credential hashes, ratings and watchlists through upgrade.
+- Recovery validates all profile reads before switching identity. Browser caches
+  are scoped to profiles; a preserved migration outbox prevents removed watchlist
+  films from reappearing. Slow responses cannot replace the selected pick mode
+  or a restored profile. Public-rating lookups are batched to at most 30 IDs.
+- Verification: pytest **83 passed**, Ruff and JavaScript checks passed; **ten
+  Chromium journeys passed**. The locked-dependency fresh checkout passed all
+  83 tests and Ruff with generated datasets/models excluded. The 0.3.0 wheel
+  includes the versioned policy JSON.
+- Real-catalog walkthrough passed onboarding, saved ratings, discovery mode and
+  desktop/mobile library use. Tablet navigation was checked at 768/900/1024 px.
+- The expanded local deployment verifier passed health, search, similar films,
+  private rating create/update, exclusions, history, library, watched feedback,
+  and undo without numeric-rating changes, using a dedicated test profile.
+- Exact model smoke checks and reproducible preparation passed. Updated warm
+  measurements are in docs/PERFORMANCE.md; these are not hosted latency guarantees.
+- The owner authorized this release and deployment in advance. No production
+  access setting, real visitor rating, or external provider credential was changed.
+  Hosted verification remains pending while Vercel Authentication blocks access.
 
 ## Decisions
 - Python 3.11/3.12 ARM64 environment preferred.

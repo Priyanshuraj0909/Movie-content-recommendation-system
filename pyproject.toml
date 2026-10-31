@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "movie-content-recommender"
-version = "0.2.0"
+version = "0.3.0"
 description = "A local-first hybrid movie recommendation system."
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
@@ -15,6 +15,9 @@ dependencies = { file = ["requirements.in"] }
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+recommender = ["services/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

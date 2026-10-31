@@ -8,7 +8,7 @@ from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Literal
 
 import pandas as pd
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request
@@ -17,12 +17,21 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.app.database import get_session, make_session_factory, sqlite_url
-from backend.app.models import FeedbackEvent, UserRating, VisitorProfile, WatchlistEntry
+from backend.app.models import (
+    FeedbackEvent,
+    MoviePreference,
+    UserRating,
+    VisitorProfile,
+    WatchlistEntry,
+)
 from backend.app.schemas import (
     ExternalMovieRatings,
     HealthResponse,
+    LibraryMovie,
+    LibraryResponse,
     MovieDetails,
     MovieResponse,
+    PreferenceChange,
     ProfileCreated,
     RatingCreate,
     RatingResponse,
@@ -120,6 +129,7 @@ def create_app(
         app.state.content_model = content_model
         app.state.collaborative_model = collaborative_model
         app.state.movies = movie_table
+        app.state.catalog = movie_table.to_dict("index")
         if use_default_semantic and (DEFAULT_DIRECTORY / "manifest.json").is_file():
             semantic_index = semantic_index or SemanticIndex()
         app.state.semantic_index = semantic_index
@@ -138,6 +148,7 @@ def create_app(
         app.state.content_model = content_model
         app.state.collaborative_model = collaborative_model
         app.state.movies = movie_table
+        app.state.catalog = movie_table.to_dict("index")
 
     def session_dependency() -> Iterable[Session]:
         yield from get_session(factory)
@@ -204,6 +215,112 @@ def create_app(
         return session.scalars(
             select(UserRating).where(UserRating.user_id == user_id).order_by(UserRating.movie_id)
         ).all()
+
+    @router.get("/profiles/{user_id}/library", response_model=LibraryResponse)
+    def taste_library(
+        user_id: int,
+        request: Request,
+        session: SessionDep,
+        view: Literal["all", "rated", "watched", "not_interested"] = "all",
+        limit: Annotated[int, Query(ge=1, le=100)] = 30,
+        offset: Annotated[int, Query(ge=0)] = 0,
+        x_profile_token: Annotated[str | None, Header(max_length=128)] = None,
+    ):
+        authorize(user_id, session, x_profile_token)
+        ratings = {
+            row.movie_id: row.rating
+            for row in session.scalars(select(UserRating).where(UserRating.user_id == user_id))
+        }
+        states = {
+            row.movie_id: row.state
+            for row in session.scalars(
+                select(MoviePreference).where(
+                    MoviePreference.user_id == user_id, MoviePreference.state != "none"
+                )
+            )
+        }
+        catalog = request.app.state.catalog
+        ids = set(ratings) | set(states)
+        if view == "rated":
+            ids = set(ratings)
+        elif view != "all":
+            ids = {mid for mid, state in states.items() if state == view}
+        ordered = sorted(
+            ids,
+            key=lambda mid: (
+                catalog.get(mid, {}).get("title", "Unavailable catalog entry").casefold(),
+                mid,
+            ),
+        )
+        return LibraryResponse(
+            items=[
+                LibraryMovie(
+                    movie_id=mid,
+                    title=catalog.get(mid, {}).get("title", "Unavailable catalog entry"),
+                    genres=catalog.get(mid, {}).get("genres", ""),
+                    rating=ratings.get(mid),
+                    state=states.get(mid, "none"),
+                    available=mid in catalog,
+                )
+                for mid in ordered[offset : offset + limit]
+            ],
+            total=len(ordered),
+            rated_count=len(ratings),
+            watched_count=sum(state == "watched" for state in states.values()),
+            dismissed_count=sum(state == "not_interested" for state in states.values()),
+        )
+
+    @router.get("/profiles/{user_id}/preferences", response_model=list[PreferenceChange])
+    def preference_history(
+        user_id: int,
+        session: SessionDep,
+        x_profile_token: Annotated[str | None, Header(max_length=128)] = None,
+    ):
+        authorize(user_id, session, x_profile_token)
+        return [
+            PreferenceChange(movie_id=row.movie_id, state=row.state)
+            for row in session.scalars(
+                select(MoviePreference)
+                .where(MoviePreference.user_id == user_id, MoviePreference.state != "none")
+                .order_by(MoviePreference.movie_id)
+            )
+        ]
+
+    @router.put("/profiles/{user_id}/preferences", response_model=PreferenceChange)
+    def save_preference(
+        user_id: int,
+        payload: PreferenceChange,
+        request: Request,
+        session: SessionDep,
+        x_profile_token: Annotated[str | None, Header(max_length=128)] = None,
+    ):
+        authorize(user_id, session, x_profile_token)
+        check_write_budget(user_id, session)
+        existing = session.scalar(
+            select(MoviePreference).where(
+                MoviePreference.user_id == user_id, MoviePreference.movie_id == payload.movie_id
+            )
+        )
+        if payload.movie_id not in request.app.state.catalog and not (
+            existing is not None and payload.state == "none"
+        ):
+            raise HTTPException(status_code=404, detail="Movie not found")
+        if existing is not None and existing.state == payload.state:
+            return payload
+        if existing is None:
+            existing = MoviePreference(user_id=user_id, **payload.model_dump())
+            session.add(existing)
+        else:
+            existing.state = payload.state
+        session.add(
+            FeedbackEvent(user_id=user_id, movie_id=payload.movie_id, event_type=payload.state)
+        )
+        try:
+            session.commit()
+        except IntegrityError:
+            session.rollback()
+            raise HTTPException(status_code=409, detail="Feedback changed; please retry") from None
+        return payload
 
     @router.get("/profiles/{user_id}/watchlist", response_model=list[MovieResponse])
     def watchlist(
@@ -420,7 +537,7 @@ def create_app(
 
     @router.get("/recommendations/popular", response_model=list[RecommendationResponse])
     def popular_recommendations(request: Request, limit: Annotated[int, Query(ge=1, le=100)] = 10):
-        table = request.app.state.movies.to_dict("index")
+        table = request.app.state.catalog
         return [
             RecommendationResponse(
                 movie_id=pick.movie_id,
@@ -444,7 +561,8 @@ def create_app(
         request: Request,
         session: SessionDep,
         limit: Annotated[int, Query(ge=1, le=100)] = 10,
-        diversity: Annotated[float, Query(ge=0, le=0.5)] = 0.12,
+        diversity: Annotated[float | None, Query(ge=0, le=0.5)] = None,
+        mode: Literal["balanced", "discovery"] = "balanced",
         x_profile_token: Annotated[str | None, Header(max_length=128)] = None,
     ) -> list[RecommendationResponse]:
         if user_id <= 0:
@@ -454,8 +572,15 @@ def create_app(
         collaborative: CollaborativeRecommender = request.app.state.collaborative_model
         rated_rows = session.scalars(select(UserRating).where(UserRating.user_id == user_id)).all()
         user_ratings = {row.movie_id: row.rating for row in rated_rows}
-        movie_table = request.app.state.movies
-        catalog = movie_table.to_dict("index")
+        excluded = session.scalars(
+            select(MoviePreference.movie_id).where(
+                MoviePreference.user_id == user_id, MoviePreference.state != "none"
+            )
+        ).all()
+        catalog = request.app.state.catalog
+        semantic = request.app.state.semantic_index
+        if semantic is not None and not hasattr(semantic, "score_preferences"):
+            semantic = None
         return [
             RecommendationResponse(
                 movie_id=pick.movie_id,
@@ -466,7 +591,15 @@ def create_app(
                 reason=pick.reason,
             )
             for pick in recommend_visitor(
-                content, collaborative, user_ratings, catalog, limit=limit, diversity=diversity
+                content,
+                collaborative,
+                user_ratings,
+                catalog,
+                limit=limit,
+                diversity=diversity,
+                mode=mode,
+                semantic_index=semantic,
+                excluded=excluded,
             )
         ]
 

@@ -4,7 +4,7 @@
 
 ### Find a story that feels like you.
 
-Movie discovery with private taste profiles, explainable recommendations, and semantic story search.
+Movie discovery with guided taste building, validation-selected recommendations, and semantic story search.
 
 [![Python 3.11–3.12](https://img.shields.io/badge/Python-3.11%E2%80%933.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -19,13 +19,15 @@ Movie discovery with private taste profiles, explainable recommendations, and se
 - Search 9,742 MovieLens titles and explore similar films.
 - Describe a story or mood and search 5,952 films with verified plot summaries.
 - Filter story results by runtime and language; filter displayed results by genre.
-- Rate films from 0.5 to 5 stars. Positive and negative feedback shape recommendations.
+- Build your taste with a five-film onboarding flow, search familiar titles, and edit saved half-star ratings in Your taste.
+- Mark films watched or not interested independently of numeric ratings, and undo those choices.
+- Choose For you or Discover more; the latter trades some measured accuracy for broader discovery.
 - Read factual recommendation reasons and keep rated films out of new picks.
 - Save ratings and a watchlist to a private browser profile. Restore it on another device with its recovery code.
 - Read attributed plot summaries behind a spoiler disclosure, with available runtime and language information.
 - Optionally display TMDB and IMDb community ratings when server-side provider credentials are configured.
 
-**Release status:** the v0.2 implementation is locally verified. See [PROGRESS.md](PROGRESS.md) for the latest GitHub/deployment evidence. A Vercel build succeeding does not establish that protected production rating writes were verified. The existing production API currently requires Vercel Authentication.
+**Release status:** the v0.3 ranking and taste-management implementation is locally verified. See [PROGRESS.md](PROGRESS.md) for the latest GitHub/deployment evidence. A Vercel build succeeding does not establish that protected production rating writes were verified. The existing production API currently requires Vercel Authentication.
 
 ## How recommendations work
 
@@ -33,7 +35,7 @@ Movie discovery with private taste profiles, explainable recommendations, and se
 
 **Collaborative:** regularized biases and a seeded, 32-factor matrix-factorization model trained offline. Serving estimates a visitor's bias and latent vector from their submitted ratings while keeping item factors fixed. A visitor ID never selects a MovieLens user's factors or history.
 
-**Visitor policy:** content preferences, visitor collaborative estimates, and a small popularity contribution are combined. Low ratings contribute negative content signals; neutral ratings still exclude watched films. The collaborative weight ramps to 0.5 at ten ratings. A bounded genre-diversity pass reranks the shortlist. This is a serving heuristic evaluated separately from the known-user benchmark; it has not demonstrated an accuracy improvement over popularity in the recorded unseen-visitor experiment.
+**Visitor policy:** default weights are selected on separate validation users and frozen before testing. At one through nine ratings, the selected blend is 0.85 popularity + 0.15 signed TF-IDF preferences. At ten or more, it adds visitor factors and plot similarity. Discover more uses a separately measured, broader mix. Numeric ratings, marked-watched states and not-interested states all exclude films from new picks. Explicit states never create artificial star ratings. See [the visitor evaluation](docs/VISITOR_EVALUATION.md).
 
 **Story search:** the pinned Sentence Transformers `all-MiniLM-L6-v2` model runs through a compact quantized ONNX CPU runtime. Masked mean pooling and normalization produce 384-dimensional embeddings; NumPy performs exact similarity search. No model download occurs during a request. Relevance scores are ranking signals, not probabilities or match percentages.
 
@@ -58,7 +60,7 @@ After correcting tag availability, the known-user experiment selected 0.75 colla
 
 The corrected hybrid does **not** outperform collaborative-only on this test split. Earlier results using all tags are historical and superseded.
 
-A separate experiment withholds 122 entire users from collaborative training and reveals their earliest onboarding ratings. With five onboarding ratings, visitor-policy NDCG@10 is 0.0811 versus popularity's 0.2040, while catalog coverage is 7.32% versus 0.14%. This accuracy/discovery tradeoff is documented rather than presented as a quality gain. The candidate catalog and amount of held-out history differ from the known-user benchmark; their scores must not be compared directly.
+The v0.3 visitor experiment uses 366 fitting users, 122 validation users and 122 disjoint test users. At five onboarding ratings, the validation-selected policy scored NDCG@10 **0.2989**, popularity **0.2847**, and the legacy v0.2 policy **0.0826** on the same cohort and candidates. The observed gain over popularity is about 5%; statistical significance and production quality have not been established. Default coverage was 0.51%; Discover more reached 1.53% with NDCG@10 0.2648. This is a different protocol from the known-user table and earlier visitor partition. [Full protocol and results](docs/VISITOR_EVALUATION.md).
 
 An optional BPR experiment converting training ratings of at least 4 into positive interactions recorded NDCG@10 0.0472 versus popularity's 0.0317. It remains a research baseline, not the serving model. Multithreaded fitting can vary between runs.
 
@@ -104,7 +106,7 @@ python -m playwright install chromium --only-shell
 python -m pytest browser_tests -q
 python scripts/verify_semantic.py
 python scripts/benchmark.py
-python -m recommender.evaluation.visitors
+python -m recommender.evaluation.visitor_selection
 ```
 
 Browser tests use synthetic data, an isolated SQLite database and a fixture search index. They exercise the real DOM and HTTP routes without downloading movie data or model weights. `verify_semantic.py` separately checks the actual local model with two illustrative queries; it is a smoke test, not a semantic-search quality benchmark.
@@ -121,7 +123,7 @@ After authorized access is available, verify writes with a dedicated newly creat
 python scripts/verify_deployment.py --base-url https://cinematch-king-09.vercel.app --create-private-profile
 ```
 
-The write check leaves a test profile and one updated rating saved; it never prints the profile secret. If automation bypass is configured, export `VERCEL_AUTOMATION_BYPASS_SECRET` before running it. Neither an HTML authentication page nor an HTTP redirect counts as API success. Hosted restart persistence still requires a separate deployment/restart observation.
+The write check leaves a test profile, one updated rating and a cleared feedback-state row; it also verifies the library and watched/undo flow. It never prints the profile secret. If automation bypass is configured, export `VERCEL_AUTOMATION_BYPASS_SECRET` before running it. Neither an HTML authentication page nor an HTTP redirect counts as API success. Hosted restart persistence still requires a separate deployment/restart observation.
 
 ### Optional research tools
 
@@ -140,7 +142,7 @@ The browser creates an anonymous profile with a random ID and a 256-bit bearer s
 
 Ratings, explicit feedback events and watchlists persist in SQLite locally and PostgreSQL when `DATABASE_URL` is configured. Private responses are marked `no-store`. Feedback writes are limited to 60 per profile per minute using persisted events. This is not a global anonymous-profile creation limit; a public service should configure appropriate edge abuse controls. Legacy numeric-profile rows remain preserved but cannot be claimed by guessing an ID in the hosted app.
 
-Alembic applies additive migrations and adopts an existing ratings table without deleting its rows. PostgreSQL migrations serialize with a transaction-scoped advisory lock. Destructive downgrade is disabled. A manual migration reads its credential from the environment:
+Alembic applies additive migrations, adopts an existing ratings table, and adds reversible movie states without deleting existing profiles, ratings or watchlists. PostgreSQL migrations serialize with a transaction-scoped advisory lock. Destructive downgrade is disabled. A manual migration reads its credential from the environment:
 
 ```bash
 python scripts/migrate_database.py
@@ -161,9 +163,11 @@ Export `DATABASE_URL` first. The application does not load `.env` automatically.
 | GET | `/api/recommendations/popular` | Public cold-start discovery |
 | GET | `/api/recommendations/similar/{movie_id}` | Similar movies |
 | POST | `/api/profiles` | Issue a private profile and recovery secret |
-| GET | `/api/recommendations/users/{user_id}` | Visitor recommendations |
+| GET | `/api/recommendations/users/{user_id}` | Visitor picks; `mode=balanced` or `mode=discovery` |
 | POST | `/api/ratings` | Save/update a half-star rating |
 | GET | `/api/profiles/{user_id}/ratings` | Private rating history |
+| GET | `/api/profiles/{user_id}/library` | Paginated rating/state library; `view`, `limit`, `offset` |
+| GET/PUT | `/api/profiles/{user_id}/preferences` | Read or set watched/not-interested/none state |
 | GET/PUT | `/api/profiles/{user_id}/watchlist` | Read/add watchlist entries |
 | DELETE | `/api/profiles/{user_id}/watchlist/{movie_id}` | Remove an owned watchlist entry |
 

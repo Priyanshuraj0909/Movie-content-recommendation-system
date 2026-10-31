@@ -23,3 +23,11 @@ Phase 9 and the final release remain pending until live checks succeed.
 
 pgvector and implicit/LightFM remain opt-in experiments. Exact NumPy retrieval is
 appropriate for the current catalog; a new vector service is not a prerequisite.
+
+## Authorized v0.3 iteration
+
+The owner renewed implementation and deployment authorization on 2026-10-31.
+Phase 14 validates and freezes visitor policies and adds semantic preferences.
+Phase 15 delivers onboarding, a private editable library, and independent
+watched/dismissed feedback through an additive migration. Production persistence
+remains an explicit gate until authorized live verification is possible.

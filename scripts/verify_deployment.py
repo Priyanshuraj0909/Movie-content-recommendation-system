@@ -61,6 +61,48 @@ def verify(client: httpx.Client, *, write_user_id: int | None = None) -> list[st
     return checks
 
 
+def verify_private_features(client: httpx.Client, user_id: int) -> list[str]:
+    """Exercise reversible feedback on a dedicated profile created by this run."""
+    prefix = f"/api/profiles/{user_id}"
+    before = client.get(prefix + "/ratings")
+    before.raise_for_status()
+    original = before.json()
+    library = client.get(prefix + "/library")
+    library.raise_for_status()
+    if library.json()["rated_count"] != len(original):
+        raise ValueError("Library rating count does not match saved history")
+    recommendations = client.get(f"/api/recommendations/users/{user_id}")
+    recommendations.raise_for_status()
+    picks = recommendations.json()
+    if not picks:
+        raise ValueError("No unrated film available for the feedback check")
+    movie_id = picks[0]["movie_id"]
+    for state in ("watched", "none"):
+        response = client.put(prefix + "/preferences", json={"movie_id": movie_id, "state": state})
+        response.raise_for_status()
+        if response.json() != {"movie_id": movie_id, "state": state}:
+            raise ValueError("Movie feedback did not match the submitted state")
+        result = client.get(f"/api/recommendations/users/{user_id}", params={"limit": 100})
+        result.raise_for_status()
+        present = any(item["movie_id"] == movie_id for item in result.json())
+        if state == "watched" and present:
+            raise ValueError("Watched film was not excluded from recommendations")
+        if state == "none":
+            preferences = client.get(prefix + "/preferences")
+            preferences.raise_for_status()
+            if any(item["movie_id"] == movie_id for item in preferences.json()):
+                raise ValueError("Feedback undo did not clear the active state")
+    after = client.get(prefix + "/ratings")
+    after.raise_for_status()
+    if after.json() != original:
+        raise ValueError("Movie state feedback unexpectedly changed numeric ratings")
+    return [
+        "private taste library",
+        "watched feedback exclusion",
+        "feedback undo preserves ratings",
+    ]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", required=True, help="Origin, without the /api suffix")
@@ -99,6 +141,7 @@ def main() -> None:
                 if not any(row["rating"] == 4.5 for row in history.json()):
                     raise ValueError("Fresh request did not observe the saved rating")
                 checks.append("private profile rating history")
+                checks.extend(verify_private_features(client, write_user_id))
     except (httpx.HTTPError, ValueError, KeyError, TypeError) as error:
         parser.exit(1, f"Verification failed: {error}\n")
     print(json.dumps({"passed": checks, "rating_writes_checked": write_user_id is not None}))

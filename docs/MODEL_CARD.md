@@ -1,4 +1,4 @@
-# Model card: CineMatch 0.2
+# Model card: CineMatch 0.3
 
 ## Scope
 
@@ -38,7 +38,7 @@ Hybrid catalog coverage is 4.80%. It does not beat collaborative-only NDCG on
 this split. Earlier all-tag metrics in historical progress notes are superseded.
 The blend was not retuned against this test result.
 
-## Visitor policy and evaluation
+## Historical v0.2 visitor policy and evaluation
 
 Serving uses only submitted visitor ratings. A regularized least-squares solve
 estimates the visitor's bias and factors against fixed item vectors. Content
@@ -66,6 +66,27 @@ The visitor policy increases discovery breadth but underperforms popularity on
 accuracy in this experiment. More personalization is not automatically better.
 A future policy selection should use separate validation visitors before a fresh
 user-held-out test, and should report accuracy and diversity together.
+
+## Current v0.3 visitor policy
+
+The serving default now uses frozen validation-selected configuration; the
+historical heuristic above is retained only as an explicit experimental baseline.
+Selection uses 366 fitting users and 122 validation users; all policies are
+exported before scoring 122 separate test users. This is a new partition of an
+already explored dataset, not an entirely new dataset.
+
+At five onboarding ratings, selected NDCG@10 is 0.2989 versus popularity 0.2847
+and legacy v0.2 0.0826 on identical test users and candidates. These observed
+results do not establish statistical significance or production quality.
+Discovery mode scores 0.2648 with 1.53% coverage, versus 0.51% for the default.
+See [the complete selection protocol](VISITOR_EVALUATION.md).
+
+The default uses popularity and signed TF-IDF for one through nine ratings,
+then adds fixed-item visitor factor estimation and a small plot-profile signal
+at ten or more. Discovery uses a larger plot contribution and genre reranking.
+Semantic preference profiles are constructed from stored embeddings; no text
+encoder is called for that operation. Missing plots contribute zero. Watched and
+not-interested states are independent, reversible exclusions, not star ratings.
 
 ## Semantic retrieval
 

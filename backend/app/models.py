@@ -58,3 +58,22 @@ class FeedbackEvent(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
+
+
+class MoviePreference(Base):
+    """A reversible explicit state, independent of numeric ratings and watchlists."""
+
+    __tablename__ = "movie_preferences"
+    __table_args__ = (
+        UniqueConstraint("user_id", "movie_id", name="uq_movie_preference"),
+        CheckConstraint("state IN ('watched', 'not_interested', 'none')", name="ck_movie_state"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    movie_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    state: Mapped[str] = mapped_column(String(20), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )

@@ -23,6 +23,7 @@
         <button class="nav-link active" type="button" data-page-link="home">Home</button>
         <button class="nav-link" type="button" data-page-link="explore">Movie search</button>
         <button class="nav-link" type="button" data-page-link="recommendations">AI picks</button>
+        <button class="nav-link" type="button" data-page-link="library">Your taste</button>
         <button class="nav-link" type="button" data-page-link="watchlist">Watchlist <span id="watchlist-count" class="nav-count">0</span></button>
       </nav>
 
@@ -92,7 +93,14 @@
 
       <section id="page-recommendations" class="page content-page" aria-labelledby="recommendations-title">
         <div class="page-intro recommendation-intro"><p class="section-kicker"><span class="sparkle">✳</span> MADE FOR YOUR TASTE</p><h1 id="recommendations-title">Your next favorite,<br /><em>waiting to happen.</em></h1><p>Your saved ratings help shape these picks. Save a few favorites and come back to see your profile take shape.</p><button class="button button-quiet recommendations-search" type="button" data-page-link="explore"><span aria-hidden="true">⌕</span> Search movies</button><div class="recommendation-profile"><span class="profile-avatar">C</span><span>PROFILE <strong id="profile-label">—</strong></span><button id="refresh-picks" class="icon-button" type="button" aria-label="Refresh recommendations">↻</button></div></div>
-        <p id="taste-progress" class="device-note">Start with 5 films you know.</p><div id="personal-results" class="poster-grid recommendation-grid" aria-live="polite"><div class="skeleton-grid"><span></span><span></span><span></span><span></span></div></div>
+        <div class="taste-start-panel"><div><p id="taste-progress" class="device-note">Start with 5 films you know.</p><p>Rate familiar films, then choose how widely you want to explore.</p></div><button class="button button-primary" type="button" data-start-onboarding>Build my taste</button></div>
+        <div class="pick-modes" role="group" aria-label="Recommendation style"><button type="button" data-pick-mode="balanced" aria-pressed="true">For you</button><button type="button" data-pick-mode="discovery" aria-pressed="false">Discover more</button><p id="pick-mode-caption">Community favorites shaped by your ratings.</p></div><div id="personal-results" class="poster-grid recommendation-grid" aria-live="polite"><div class="skeleton-grid"><span></span><span></span><span></span><span></span></div></div>
+      </section>
+
+      <section id="page-library" class="page content-page" aria-labelledby="library-title">
+        <div class="page-intro"><p class="section-kicker">YOUR TASTE, YOUR CHOICE</p><h1 id="library-title">Make it more you.</h1><p>Edit your ratings and manage films you’ve watched or would rather skip. Your saved ratings stay separate from these choices.</p><button class="button button-primary" type="button" data-start-onboarding>Rate films I know</button></div>
+        <div class="taste-library-toolbar"><p id="library-summary" aria-live="polite">Your taste profile is loading…</p><label for="library-filter">Show</label><select id="library-filter"><option value="all">All feedback</option><option value="rated">Rated films</option><option value="watched">Marked watched</option><option value="not_interested">Not interested</option></select></div>
+        <div id="library-results" class="taste-library" aria-live="polite"></div><button id="library-more" class="button button-quiet" type="button" hidden>Load more films</button>
       </section>
 
       <section id="page-watchlist" class="page content-page" aria-labelledby="watchlist-title">
@@ -104,6 +112,14 @@
     </main>
 
     <footer class="site-footer"><a class="brand footer-brand" href="#home" data-page-link="home"><span class="brand-symbol" aria-hidden="true">✳</span><span class="brand-name">CineMatch<span>AI</span></span></a><span>Stories found together.</span><span class="footer-catalog">MOVIELENS · CONTENT-BASED + COLLABORATIVE RECOMMENDATIONS</span><a class="tmdb-credit" href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer" aria-label="The Movie Database (TMDB)"><img src="https://www.themoviedb.org/assets/2/v4/logos/408x161-powered-by-rectangle-green.png" alt="Powered by TMDB" loading="lazy" /><span>TMDB</span></a><span class="tmdb-disclaimer">This product uses the TMDB API but is not endorsed or certified by TMDB.</span></footer>
+
+    <dialog id="onboarding-dialog" class="onboarding-dialog" aria-labelledby="onboarding-title">
+      <button class="dialog-close" type="button" id="close-onboarding" aria-label="Close taste builder">×</button>
+      <p class="section-kicker">A FEW FAMILIAR STORIES</p><h2 id="onboarding-title">Start with films you know.</h2><p>Rate five familiar films to build your taste profile. You can start with fewer and add more later.</p>
+      <label id="onboarding-progress-label" for="onboarding-progress">0 of 5 films rated</label><progress id="onboarding-progress" max="5" value="0"></progress>
+      <form id="onboarding-search-form"><label for="onboarding-search">Find a film you’ve seen</label><div class="onboarding-search-row"><input id="onboarding-search" type="search" maxlength="100" placeholder="Search a movie title…" autocomplete="off" /><button class="button button-quiet" type="submit">Find films</button></div></form>
+      <div id="onboarding-results" class="onboarding-results" aria-live="polite"></div><div class="onboarding-footer"><p id="onboarding-hint">A few honest ratings are a useful start.</p><button id="finish-onboarding" class="button button-primary" type="button">See my picks</button></div>
+    </dialog>
 
     <dialog id="profile-dialog" class="profile-dialog" aria-labelledby="profile-dialog-title">
       <button class="dialog-close" type="button" data-close-profile aria-label="Close profile settings">×</button>

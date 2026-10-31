@@ -55,6 +55,10 @@ def main() -> None:
     candidate_ids = collaborative.movie_ids[:1000]
     catalog = movies.set_index("movieId").to_dict("index")
     feedback = {1: 5.0, 2: 4.0, 3: 2.0, 4: 3.0, 5: 4.5}
+    index = None
+    semantic_load = None
+    if (DEFAULT_DIRECTORY / "manifest.json").is_file():
+        index, semantic_load = timed_load("semantic", SemanticIndex)
 
     report = {
         "environment": {
@@ -85,7 +89,10 @@ def main() -> None:
                 lambda: collaborative.recommend_for_user(1, top_k=10), repeats=20
             ),
             "visitor_top_10_five_ratings": measure(
-                lambda: recommend_visitor(content, collaborative, feedback, catalog), repeats=20
+                lambda: recommend_visitor(
+                    content, collaborative, feedback, catalog, semantic_index=index
+                ),
+                repeats=20,
             ),
         },
         "method": (
@@ -93,8 +100,7 @@ def main() -> None:
             "No network latency or concurrent traffic included."
         ),
     }
-    if (DEFAULT_DIRECTORY / "manifest.json").is_file():
-        index, semantic_load = timed_load("semantic", SemanticIndex)
+    if index is not None:
         index.search("a hopeful story about space exploration")
         report["model_artifacts"]["semantic_load_seconds"] = semantic_load
         report["warm_operations"]["semantic_query_top_10"] = measure(
