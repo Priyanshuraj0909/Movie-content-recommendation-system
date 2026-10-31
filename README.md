@@ -96,6 +96,12 @@ python scripts/preview.py
 
 Open `http://127.0.0.1:8000`. Use one server at a time on that port. Alternatively, run `streamlit run frontend/app.py` alongside the API. Streamlit retains the local numeric-profile demo; the private-profile, watchlist, plot and story-search experience is in the browser frontend. Hosted deployments require private profile credentials.
 
+If opening the app shows “Connection interrupted”, use **Try again** on the picks
+panel. API requests time out after 15 seconds instead of leaving loading cards
+on screen indefinitely. Retrying keeps your private profile and saved feedback.
+If the message mentions deployment sign-in, the Vercel owner needs to check
+deployment access; an API request must return JSON rather than a login page.
+
 ## Verify and reproduce
 
 ```bash
@@ -110,6 +116,14 @@ python -m recommender.evaluation.visitor_selection
 ```
 
 Browser tests use synthetic data, an isolated SQLite database and a fixture search index. They exercise the real DOM and HTTP routes without downloading movie data or model weights. `verify_semantic.py` separately checks the actual local model with two illustrative queries; it is a smoke test, not a semantic-search quality benchmark.
+
+To use an existing Chrome installation instead of downloading test Chromium,
+set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to its executable path when running browser
+tests. On macOS:
+
+```bash
+PLAYWRIGHT_CHROMIUM_EXECUTABLE='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' python -m pytest browser_tests -q
+```
 
 Production verification defaults to read-only:
 

@@ -332,6 +332,7 @@ main { min-height: calc(100vh - 150px); }
 .empty-symbol { color: #a78bfa; font-size: 26px; }
 .empty-panel h2 { margin: 13px 0 5px; font: 500 22px var(--serif); }
 .empty-panel p { margin: 0; color: #8d8e98; font-size: 11px; line-height: 1.7; }
+.connection-retry { justify-self: center; margin-top: 18px; }
 .error-panel { border-color: #bf596238; background: #351b252b; }
 .skeleton-grid { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
 .skeleton-grid span { aspect-ratio: 2 / 3.7; border-radius: 10px; background: linear-gradient(100deg, #14151b 25%, #20212a 42%, #14151b 60%); background-size: 220% 100%; animation: shimmer 1.5s infinite; }

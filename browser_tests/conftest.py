@@ -1,5 +1,6 @@
 """Run the real web frontend and API against an isolated fixture database."""
 
+import os
 import socket
 import threading
 import time
@@ -71,7 +72,9 @@ def site_url(tmp_path_factory):
 @pytest.fixture
 def page(site_url):
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch()
+        browser = playwright.chromium.launch(
+            executable_path=os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE")
+        )
         context = browser.new_context(viewport={"width": 1280, "height": 900})
         page = context.new_page()
         errors = []

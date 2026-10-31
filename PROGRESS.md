@@ -111,6 +111,28 @@ no paid database, new vector service or external credential was created.
 - Python 3.11/3.12 ARM64 environment preferred.
 - MovieLens latest-small for initial MVP.
 
+## Phase 15 startup recovery follow-up — 2026-10-31
+
+- API requests now have a 15-second deadline, including response-body reads.
+  Stalled requests settle into readable errors with an explicit retry action on
+  home and recommendation panels. Retrying retains the existing private identity.
+- Connection status waits for both health and profile initialization, so a
+  successful health response cannot hide a failed profile read. HTML deployment
+  sign-in responses receive a readable message instead of a JSON parsing error.
+- Legacy watchlist imports yield after a one-second budget between writes and
+  preserve remaining entries in the existing outbox for a later connection.
+- Verification: `.venv/bin/python -m pytest -q` **83 passed**;
+  `.venv/bin/python -m ruff check .`, `node --check frontend/web/app.js`,
+  Vercel JSON parsing and `git diff --check` passed. Browser journeys **13 passed**
+  using installed Google Chrome through `PLAYWRIGHT_CHROMIUM_EXECUTABLE`, including
+  stalled startup, profile storage failure, HTML sign-in, retry and profile retention.
+  Default browser launch was unavailable because the expected Playwright browser
+  was missing; the older cached Chromium was incomplete. No dependency was installed.
+- Public GitHub status reports the preceding release's Vercel deployment succeeded.
+  A direct request to the live `/api/health` timed out after 20 seconds from this
+  environment. Hosted runtime and persistence verification remain open; this
+  follow-up does not claim the production backend is healthy.
+
 ## Blockers
 - 2026-10-21: The production `/api/health` request returned a Vercel Authentication
   page instead of API JSON. Authorized deployment access is needed to verify the

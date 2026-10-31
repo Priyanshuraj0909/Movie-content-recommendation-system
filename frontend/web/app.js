@@ -1,4 +1,5 @@
 const API = "/api";
+const REQUEST_TIMEOUT_MS = 15000;
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 const PALETTE = ["#6c51aa", "#8b4c75", "#375f77", "#83603e", "#514b8b", "#397061", "#8c4850", "#526483"];
@@ -61,11 +62,14 @@ async function initializeProfile() {
   }
   pending = pending.filter((movie, i, entries) => Number.isSafeInteger(movie.movie_id) && entries.findIndex((entry) => entry.movie_id === movie.movie_id) === i);
   const remaining = [];
+  const importStarted = performance.now();
   for (let i = 0; i < pending.length; i += 1) {
     if (generation !== profileGeneration) return;
     const movie = pending[i];
     if (remote.some((entry) => entry.movie_id === movie.movie_id)) continue;
-    if (i >= 500) { remaining.push(...pending.slice(i)); break; }
+    // Preserve the outbox and continue next time instead of delaying opening
+    // the app for a large legacy list. Each in-flight write is also time bounded.
+    if (i >= 500 || performance.now() - importStarted >= 1000) { remaining.push(...pending.slice(i)); break; }
     try {
       await request("/profiles/" + currentId + "/watchlist", { headers,
         method: "PUT", body: JSON.stringify({ movie_id: movie.movie_id }),
@@ -92,19 +96,31 @@ function updateOnboarding() {
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(API + path, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...(privateProfile?.token ? { "X-Profile-Token": privateProfile.token } : {}), ...(options.headers || {}) },
-  });
-  if (!response.ok) {
-    let message = "The cinema service returned " + response.status + ".";
-    try {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(API + path, {
+      ...options,
+      signal: controller.signal,
+      headers: { "Content-Type": "application/json", ...(privateProfile?.token ? { "X-Profile-Token": privateProfile.token } : {}), ...(options.headers || {}) },
+    });
+    if (response.redirected || !response.headers.get("content-type")?.includes("application/json")) {
+      throw new Error("The cinema service is unavailable or requires deployment sign-in. Please try again shortly.");
+    }
+    if (!response.ok) {
+      let message = "The cinema service returned " + response.status + ".";
       const payload = await response.json();
-      message = payload.detail || message;
-    } catch { /* Keep the readable status message. */ }
-    throw new Error(message);
+      if (typeof payload.detail === "string") message = payload.detail;
+      throw new Error(message);
+    }
+    return await response.json();
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error("The cinema is taking too long to respond. Please try again.");
+    if (error instanceof TypeError) throw new Error("Couldn’t reach the cinema. Check your connection and try again.");
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
-  return response.json();
 }
 
 function getWatchlist() {
@@ -155,7 +171,7 @@ function showToast(message, isError = false) {
   toastTimer = setTimeout(() => toast.classList.remove("show"), 3300);
 }
 
-function showEmpty(container, title, message, isError = false) {
+function showEmpty(container, title, message, isError = false, retry = null) {
   container.replaceChildren();
   const panel = document.createElement("div");
   panel.className = "empty-panel" + (isError ? " error-panel" : "");
@@ -167,6 +183,14 @@ function showEmpty(container, title, message, isError = false) {
   const copy = document.createElement("p");
   copy.textContent = message;
   panel.append(icon, heading, copy);
+  if (retry) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "button button-outline connection-retry";
+    button.textContent = "Try again";
+    button.addEventListener("click", retry);
+    panel.append(button);
+  }
   container.append(panel);
 }
 
@@ -440,13 +464,12 @@ function setConnection(status, message) {
 }
 
 async function checkHealth() {
-  try {
-    const health = await request("/health");
-    setConnection("online", "Connected · " + Number(health.movies_loaded).toLocaleString() + " films");
-    $("#catalog-count").textContent = Number(health.movies_loaded).toLocaleString() + " stories in the collection";
-  } catch {
-    setConnection("offline", "Cinema unavailable");
+  const health = await request("/health");
+  if (health.status !== "ok" || !Number.isSafeInteger(health.movies_loaded)) {
+    throw new Error("The cinema returned an unexpected response. Please try again.");
   }
+  $("#catalog-count").textContent = Number(health.movies_loaded).toLocaleString() + " stories in the collection";
+  return health;
 }
 
 async function loadHomePicks() {
@@ -460,7 +483,7 @@ async function loadHomePicks() {
     renderMovies(container, movies, "Let’s find your first favorite.", "Rate a film you love to shape recommendations for this profile.");
   } catch (error) {
     if (sequence !== homeSequence || generation !== profileGeneration) return;
-    showEmpty(container, "Your picks couldn’t load.", error.message, true);
+    showEmpty(container, "Your picks couldn’t load.", error.message, true, retryConnection);
   }
 }
 
@@ -477,7 +500,7 @@ async function loadRecommendations() {
     renderMovies(container, movies, "Your next story is one rating away.", "Explore the collection and rate a film you already love.");
   } catch (error) {
     if (sequence !== picksSequence || generation !== profileGeneration) return;
-    showEmpty(container, "Recommendations aren’t available right now.", error.message, true);
+    showEmpty(container, "Recommendations aren’t available right now.", error.message, true, retryConnection);
   }
 }
 
@@ -773,12 +796,33 @@ $("#movie-dialog").addEventListener("click", (event) => {
 const nav = $(".primary-nav");
 nav.id = "primary-nav";
 $("#profile-label").textContent = "Private";
-const profileReadyInitial = initializeProfile();
-let profileReady = profileReadyInitial;
-profileReady.catch((error) => setConnection("offline", error.message));
+let profileReady;
+let connectionAttempt = null;
+function retryConnection() {
+  if (connectionAttempt) return connectionAttempt;
+  const generation = profileGeneration;
+  setConnection("", "Connecting…");
+  $("#home-picks").innerHTML = '<div class="loading-state">Getting your films ready…</div>';
+  profileReady = initializeProfile();
+  // Observe both failures immediately; a healthy API must not hide a profile error.
+  connectionAttempt = Promise.allSettled([checkHealth(), profileReady]).then(([health, profile]) => {
+    if (generation !== profileGeneration) return;
+    if (health.status === "fulfilled" && profile.status === "fulfilled") {
+      setConnection("online", "Connected · " + health.value.movies_loaded.toLocaleString() + " films");
+    } else {
+      setConnection("offline", "Connection interrupted");
+      if (profile.status === "rejected") {
+        showEmpty($("#home-picks"), "Your picks couldn’t load.", profile.reason.message, true, retryConnection);
+      }
+    }
+  }).finally(() => { connectionAttempt = null; });
+  loadHomePicks();
+  if ($("#page-recommendations").classList.contains("active")) loadRecommendations();
+  checkCapabilities();
+  return connectionAttempt;
+}
 updateWatchlistCount();
-checkHealth();
-loadHomePicks();
+retryConnection();
 
 $("#show-recovery").addEventListener("click", () => {
   const input = $("#recovery-code");
@@ -823,7 +867,6 @@ $("#discovery-mode").addEventListener("change", () => {
 });
 $("#max-runtime").addEventListener("change", () => runSearch(false));
 $("#story-language").addEventListener("change", () => runSearch(false));
-checkCapabilities();
 
 const tmdbLogo = $(".tmdb-credit img");
 if (tmdbLogo) {
