@@ -503,3 +503,14 @@ main { min-height: calc(100vh - 150px); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+.recommendation-reason { color: #b1adbd; font-size: .78rem; line-height: 1.5; margin: .65rem 0; }
+#recovery-code, #profile-id-input { width: 100%; box-sizing: border-box; margin: .6rem 0; padding: .8rem; color: #eee; background: #17151e; border: 1px solid #48404f; border-radius: 8px; }
+
+.discovery-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin: 1.5rem 0 0; }
+.discovery-controls label { color: #b7b2c3; font-size: .85rem; }
+.discovery-controls input, .discovery-controls select { padding: .6rem; background: #17151e; color: #eee; border: 1px solid #48404f; border-radius: 8px; max-width: 180px; }
+.discovery-controls input:disabled { opacity: .45; }
+#plot-section { margin: 1rem 0; line-height: 1.65; color: #ccc6d5; }
+#plot-section summary { cursor: pointer; color: #d7bfff; }
+#plot-section a { color: #d7bfff; }

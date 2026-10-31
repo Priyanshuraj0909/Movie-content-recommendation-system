@@ -181,9 +181,7 @@ class CollaborativeRecommender:
         self._movie_bias = movie_bias
 
         popularity_reg = self.params["popularity_regularization"]
-        movie_sums = np.bincount(
-            movie_indices, weights=values, minlength=len(self._movie_ids)
-        )
+        movie_sums = np.bincount(movie_indices, weights=values, minlength=len(self._movie_ids))
         self._popularity_scores = (movie_sums + popularity_reg * self.global_mean) / (
             self._movie_counts + popularity_reg
         )
@@ -199,9 +197,7 @@ class CollaborativeRecommender:
         values = values[order]
         rng = np.random.default_rng(self.params["seed"])
         scale = 0.05
-        user_factors = rng.normal(
-            0.0, scale, size=(len(self._user_ids), self.params["n_factors"])
-        )
+        user_factors = rng.normal(0.0, scale, size=(len(self._user_ids), self.params["n_factors"]))
         movie_factors = rng.normal(
             0.0, scale, size=(len(self._movie_ids), self.params["n_factors"])
         )
@@ -216,9 +212,7 @@ class CollaborativeRecommender:
                 movie_vector = movie_factors[movie_index]
                 old_user_vector = user_vector.copy()
                 error = values[row_index] - baseline[row_index] - user_vector @ movie_vector
-                user_vector += learning_rate * (
-                    error * movie_vector - regularization * user_vector
-                )
+                user_vector += learning_rate * (error * movie_vector - regularization * user_vector)
                 movie_vector += learning_rate * (
                     error * old_user_vector - regularization * movie_vector
                 )
@@ -277,6 +271,42 @@ class CollaborativeRecommender:
                 self._user_factors[selected_users] * self._movie_factors[selected_movies], axis=1
             )
         return np.clip(predictions, 0.5, 5.0)
+
+    def predict_profile(
+        self, ratings: dict[int, float], movie_ids: Iterable[int], *, regularization: float = 1.0
+    ) -> np.ndarray:
+        """Fold a visitor into fixed item factors without using a benchmark user ID.
+
+        Solve a small ridge regression for the visitor's bias and latent vector.
+        No fitted array or training history is modified by a serving request.
+        """
+        self._require_fitted()
+        if regularization <= 0:
+            raise ValueError("regularization must be positive")
+        assert self._movie_factors is not None and self._movie_bias is not None
+        assert self.global_mean is not None
+        known = sorted((mid, float(r)) for mid, r in ratings.items() if mid in self._movie_index)
+        if any(not np.isfinite(r) or not 0.5 <= r <= 5 for _, r in known):
+            raise ValueError("ratings must be finite and between 0.5 and 5")
+        candidates = list(movie_ids)
+        result = np.full(len(candidates), self.global_mean, dtype=np.float64)
+        factor = np.zeros(self._movie_factors.shape[1] + 1)
+        if known:
+            indices = [self._movie_index[mid] for mid, _ in known]
+            design = np.column_stack((np.ones(len(indices)), self._movie_factors[indices]))
+            residual = np.asarray([r for _, r in known]) - (
+                self.global_mean + self._movie_bias[indices]
+            )
+            penalty = np.eye(design.shape[1]) * regularization
+            penalty[0, 0] = self.params["bias_regularization"]
+            factor = np.linalg.solve(design.T @ design + penalty, design.T @ residual)
+        for position, mid in enumerate(candidates):
+            index = self._movie_index.get(int(mid))
+            if index is not None:
+                result[position] += (
+                    self._movie_bias[index] + factor[0] + self._movie_factors[index] @ factor[1:]
+                )
+        return np.clip(result, 0.5, 5.0)
 
     def evaluate(self, ratings: pd.DataFrame, *, algorithm: str = "auto") -> RatingMetrics:
         """Measure RMSE and MAE on a held-out ratings table."""

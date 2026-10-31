@@ -1,4 +1,6 @@
--r requirements.txt
+-r requirements.in
 -r requirements-ui.txt
 pytest>=8,<10
 ruff>=0.6,<1
+playwright>=1.50,<2
+uv>=0.9,<1

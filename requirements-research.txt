@@ -1,0 +1,4 @@
+-r requirements-dev.txt
+sentence-transformers>=5,<6
+mlflow-skinny>=3,<4
+implicit>=0.7,<1

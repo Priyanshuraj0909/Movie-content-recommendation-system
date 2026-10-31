@@ -13,7 +13,10 @@ Build a tested, explainable, portfolio-ready hybrid movie recommendation platfor
 4. Implement only the active phase in small, reviewable increments.
 5. Run format/lint/tests appropriate to the phase; report exact commands and results.
 6. Check acceptance criteria; document known limitations.
-7. Update PROGRESS.md, and stop. Wait for approval to begin the next phase.
+7. Update PROGRESS.md after verification. Wait for approval unless the owner has
+   already authorized the following phases. Under the owner's 2026-10-31 all-phases
+   request, continue independent local work sequentially while recording unresolved
+   external release gates; never mark those gates complete without live evidence.
 ## Engineering rules
 - Use a Python virtual environment; avoid global installs.
 - Keep data loading, algorithms, evaluation, API and UI separate.

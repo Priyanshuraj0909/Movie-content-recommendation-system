@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 
 import httpx
 
@@ -36,7 +37,12 @@ def verify(client: httpx.Client, *, write_user_id: int | None = None) -> list[st
         raise ValueError("Similar-film results are empty or include the seed")
     checks.append("similar films")
     profile_id = write_user_id if write_user_id is not None else 2_000_000_001
-    recommendations = request("GET", f"/api/recommendations/users/{profile_id}")
+    recommendations = request(
+        "GET",
+        f"/api/recommendations/users/{profile_id}"
+        if write_user_id is not None
+        else "/api/recommendations/popular",
+    )
     if not recommendations:
         raise ValueError("Profile recommendations are empty")
     checks.append("recommendations")
@@ -59,16 +65,43 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", required=True, help="Origin, without the /api suffix")
     parser.add_argument(
-        "--write-user-id", type=int,
+        "--write-user-id",
+        type=int,
         help="Dedicated disposable profile: creates/updates one rating and leaves it saved",
+    )
+    parser.add_argument(
+        "--create-private-profile",
+        action="store_true",
+        help="Create a private test profile and verify writes without printing its secret",
     )
     args = parser.parse_args()
     try:
-        with httpx.Client(base_url=args.base_url, timeout=30, follow_redirects=False) as client:
-            checks = verify(client, write_user_id=args.write_user_id)
+        headers = {}
+        bypass = os.environ.get("VERCEL_AUTOMATION_BYPASS_SECRET")
+        if bypass:
+            headers["x-vercel-protection-bypass"] = bypass
+        with httpx.Client(
+            base_url=args.base_url, timeout=30, follow_redirects=False, headers=headers
+        ) as client:
+            write_user_id = args.write_user_id
+            if args.create_private_profile:
+                if write_user_id is not None:
+                    raise ValueError("Choose a private profile or a legacy write ID, not both")
+                created = client.post("/api/profiles")
+                created.raise_for_status()
+                profile = created.json()
+                write_user_id = profile["user_id"]
+                client.headers["X-Profile-Token"] = profile["token"]
+            checks = verify(client, write_user_id=write_user_id)
+            if args.create_private_profile:
+                history = client.get(f"/api/profiles/{write_user_id}/ratings")
+                history.raise_for_status()
+                if not any(row["rating"] == 4.5 for row in history.json()):
+                    raise ValueError("Fresh request did not observe the saved rating")
+                checks.append("private profile rating history")
     except (httpx.HTTPError, ValueError, KeyError, TypeError) as error:
         parser.exit(1, f"Verification failed: {error}\n")
-    print(json.dumps({"passed": checks, "rating_writes_checked": args.write_user_id is not None}))
+    print(json.dumps({"passed": checks, "rating_writes_checked": write_user_id is not None}))
 
 
 if __name__ == "__main__":

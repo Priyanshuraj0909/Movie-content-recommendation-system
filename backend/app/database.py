@@ -5,7 +5,9 @@ from __future__ import annotations
 from collections.abc import Generator
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 
@@ -18,8 +20,17 @@ def make_session_factory(database_url: str) -> sessionmaker[Session]:
     if database_url.startswith("postgresql://"):
         database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
     connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
-    engine = create_engine(database_url, connect_args=connect_args)
-    Base.metadata.create_all(engine)
+    engine = create_engine(database_url, connect_args=connect_args, pool_pre_ping=True)
+    configuration = Config()
+    configuration.set_main_option(
+        "script_location", str(Path(__file__).resolve().parents[1] / "migrations")
+    )
+    with engine.begin() as connection:
+        if connection.dialect.name == "postgresql":
+            # Serialize concurrent serverless startup migrations without retaining a lock.
+            connection.execute(text("SELECT pg_advisory_xact_lock(742100031)"))
+        configuration.attributes["connection"] = connection
+        command.upgrade(configuration, "head")
     return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 

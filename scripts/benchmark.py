@@ -14,6 +14,8 @@ import pandas as pd
 from recommender.config import ARTIFACTS_DIR, PROCESSED_DATA_DIR
 from recommender.models.collaborative import CollaborativeRecommender
 from recommender.models.content import ContentRecommender
+from recommender.models.semantic import DEFAULT_DIRECTORY, SemanticIndex
+from recommender.services.visitor import recommend_visitor
 
 
 def measure(function: Callable[[], object], repeats: int = 40) -> dict[str, float]:
@@ -51,6 +53,8 @@ def main() -> None:
     )
     movies = pd.read_csv(movies_path)
     candidate_ids = collaborative.movie_ids[:1000]
+    catalog = movies.set_index("movieId").to_dict("index")
+    feedback = {1: 5.0, 2: 4.0, 3: 2.0, 4: 3.0, 5: 4.5}
 
     report = {
         "environment": {
@@ -80,12 +84,22 @@ def main() -> None:
             "recommend_for_user_top_10": measure(
                 lambda: collaborative.recommend_for_user(1, top_k=10), repeats=20
             ),
+            "visitor_top_10_five_ratings": measure(
+                lambda: recommend_visitor(content, collaborative, feedback, catalog), repeats=20
+            ),
         },
         "method": (
             "Single local process, artifacts already on disk, timings warmed by repeated calls. "
             "No network latency or concurrent traffic included."
         ),
     }
+    if (DEFAULT_DIRECTORY / "manifest.json").is_file():
+        index, semantic_load = timed_load("semantic", SemanticIndex)
+        index.search("a hopeful story about space exploration")
+        report["model_artifacts"]["semantic_load_seconds"] = semantic_load
+        report["warm_operations"]["semantic_query_top_10"] = measure(
+            lambda: index.search("a hopeful story about space exploration", limit=10), repeats=20
+        )
     print(json.dumps(report, indent=2))
 
 

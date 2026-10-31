@@ -10,7 +10,8 @@ signals; a popularity fallback keeps cold-start requests useful.
 ## How did you prevent evaluation leakage?
 
 Ratings are split chronologically per user. The model fits only on training
-ratings. Blend weights are selected against validation NDCG@10; test data is
+ratings; tags must also satisfy each author's training cutoff. The unseen-user
+experiment additionally removes withheld visitors from fitting. Blend weights are selected against validation NDCG@10; test data is
 loaded only after selection. Each evaluated user receives the same candidate
 catalog, with their training history removed.
 
@@ -19,7 +20,8 @@ catalog, with their training history removed.
 I evaluated a fixed grid of five weights on validation, using NDCG@10 as the
 primary selection metric and recall/precision as tie breakers. The test split
 was not used to choose the blend. A new dataset or training policy would need
-new validation tuning.
+new validation tuning. This weight describes the known-user experiment; the
+visitor serving policy is separate and does not inherit this weight.
 
 ## What does the content model use?
 
@@ -36,9 +38,9 @@ the popularity baseline.
 
 ## How are watched items excluded?
 
-The collaborative model records each user's training history. The API also
-loads locally submitted ratings from SQLite and removes both sets before
-ranking candidates.
+The known-user benchmark excludes each MovieLens user's training history.
+Application visitors are a separate identity space: serving excludes only that
+visitor's submitted ratings, never an unrelated benchmark user's history.
 
 ## Why store ratings in SQLite?
 
@@ -55,9 +57,11 @@ test partition.
 
 ## What is missing for production use?
 
-Authentication, authorization, privacy and retention policies, abuse controls,
-observability, robust migrations, deployment-specific storage, load testing,
-and model/data versioning. The current numeric profile IDs are not identity.
+The browser now has bearer-secret profile ownership, persistent watchlists,
+additive Alembic migrations and reproducible model inputs. A broader production
+service still needs stronger account recovery, edge controls for anonymous
+profile creation, retention policies, concurrent load tests and online evaluation.
+Protected hosted rating persistence must be verified with authorized access.
 
 ## What did you measure for performance?
 
@@ -65,3 +69,25 @@ The repository benchmark records model load time and warm in-process title
 search, similarity, prediction and ranking latency on the local demo hardware.
 Those numbers exclude network and concurrent traffic and are not production
 service-level objectives.
+
+## What did the new experiments teach you?
+
+Correcting tag availability lowered the old hybrid result. The current visitor
+heuristic improves catalog breadth but trails popularity on held-out visitor
+accuracy. An experimental BPR baseline did better on the known-user task, but
+that does not establish that it should replace the visitor model. These results
+are reported separately with their actual candidate sets and limitations.
+
+## Why use ONNX and exact NumPy search?
+
+The Sentence Transformers MiniLM model provides semantic representations without
+shipping the research PyTorch stack in the serverless application. The published
+quantized model and index occupy about 31 MB locally. Exact retrieval is practical
+for 5,952 verified plots; a separate vector database is not currently required.
+
+## How do visitors get collaborative personalization?
+
+A small ridge-regression solve estimates a visitor bias and latent vector from
+submitted ratings against fixed movie factors. It updates no global model arrays
+and reads no MovieLens user identity. The private profile's ID is used only for
+application persistence and ownership checks.

@@ -8,6 +8,7 @@ from recommender.data.movielens import (
     DataValidationError,
     chronological_split,
     prepare_dataset,
+    training_tags,
     validate_dataset,
 )
 
@@ -116,7 +117,9 @@ def test_prepare_dataset_saves_tag_features_splits_and_manifest(tmp_path: Path) 
     tag_lists = dict(zip(movies.movieId, movies.tags_json, strict=True))
     assert json.loads(tag_lists[1]) == ["Space", "space"]
     assert json.loads(tag_lists[2]) == []
-    assert json.loads(tag_lists[3]) == ["Misérables"]
+    assert json.loads(tag_lists[3]) == []  # Applied after this author's training cutoff.
+    assert manifest["feature_policy_version"] == 2
+    assert manifest["counts"]["training_tag_applications"] == 2
     assert manifest["archive_md5"] == "abc123"
     assert manifest["counts"]["ratings"] == 8
     assert manifest["counts"]["train_ratings"] == 6
@@ -125,3 +128,16 @@ def test_prepare_dataset_saves_tag_features_splits_and_manifest(tmp_path: Path) 
     assert links.loc[0, "imdbId"] == "00001"
     assert (processed_dir / "dataset_manifest.json").is_file()
     assert len(pd.read_csv(processed_dir / "train_ratings.csv")) == 6
+
+
+def test_future_and_unseen_author_tags_are_excluded():
+    tags = pd.DataFrame(
+        {
+            "userId": [1, 1, 2],
+            "movieId": [1, 1, 1],
+            "tag": ["available", "future", "unseen author"],
+            "timestamp": [90, 110, 50],
+        }
+    )
+    train = pd.DataFrame({"userId": [1], "timestamp": [100]})
+    assert training_tags(tags, train)["tag"].tolist() == ["available"]

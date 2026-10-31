@@ -305,6 +305,17 @@ def _movie_features(movies: pd.DataFrame, tags: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def training_tags(tags: pd.DataFrame, training_ratings: pd.DataFrame) -> pd.DataFrame:
+    """Keep tags available by each author's last training rating.
+
+    This enforces per-author availability, not one global historical cutoff.
+    Authors absent from training cannot contribute tags to training features.
+    """
+    cutoffs = training_ratings.groupby("userId")["timestamp"].max()
+    available_by = tags["userId"].map(cutoffs)
+    return tags.loc[available_by.notna() & tags["timestamp"].le(available_by)].copy()
+
+
 def _date_range(timestamps: pd.Series) -> dict[str, str | None]:
     if timestamps.empty:
         return {"first_utc": None, "last_utc": None}
@@ -329,9 +340,10 @@ def prepare_dataset(
         archive_md5 = metadata.get("archive_md5")
     frames = validate_dataset(_read_source_files(raw_dir))
     train, validation, test = chronological_split(frames["ratings.csv"])
+    available_tags = training_tags(frames["tags.csv"], train)
     processed_dir.mkdir(parents=True, exist_ok=True)
     outputs = {
-        "movies_with_tags.csv": _movie_features(frames["movies.csv"], frames["tags.csv"]),
+        "movies_with_tags.csv": _movie_features(frames["movies.csv"], available_tags),
         "links.csv": frames["links.csv"],
         "train_ratings.csv": train,
         "validation_ratings.csv": validation,
@@ -345,12 +357,15 @@ def prepare_dataset(
         "users_with_ratings": int(frames["ratings.csv"]["userId"].nunique()),
         "ratings": int(len(frames["ratings.csv"])),
         "tag_applications": int(len(frames["tags.csv"])),
+        "training_tag_applications": int(len(available_tags)),
         "links": int(len(frames["links.csv"])),
         "train_ratings": int(len(train)),
         "validation_ratings": int(len(validation)),
         "test_ratings": int(len(test)),
     }
     manifest: dict[str, Any] = {
+        "feature_policy_version": 2,
+        "tag_availability": "timestamp <= author's training cutoff; absent authors excluded",
         "dataset": "MovieLens latest-small",
         "source_url": DATASET_URL,
         "checksum_url": CHECKSUM_URL,

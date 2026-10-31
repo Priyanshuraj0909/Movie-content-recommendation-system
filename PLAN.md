@@ -1,4 +1,21 @@
 # Project Plan: Movie & Content Recommendation System
+## Authorized v0.2 extension
+The owner approved the complete upgrade and deployment on 2026-10-31. See
+`docs/UPGRADE_ROADMAP.md` and Phases 10–13. Existing MVP decisions below are
+historical where superseded by this extension. Production verification remains
+a separate open gate while Vercel Authentication blocks automated access.
+
+The current serving path adds private anonymous profiles, visitor factor
+estimation, negative content preferences, recommendation explanations and
+persistent watchlists. Plot discovery uses attributed CMU/Wikipedia summaries,
+a pinned Sentence Transformers model via ONNX and exact NumPy retrieval.
+Alembic preserves existing ratings; universal hashed lockfiles cover runtime,
+UI, development and optional MLflow/Implicit research environments.
+
+Evaluate known MovieLens users and wholly unseen visitors separately. Filter
+training tags by author training cutoff. Static plot metadata is not included
+in the chronological benchmark. Do not carry old all-tag metrics forward.
+
 ## Objective
 Build a local-first personalized movie recommendation system with content-based, collaborative, and hybrid algorithms; reproducible evaluation; FastAPI; Streamlit; and optional MLflow.
 ## Architecture

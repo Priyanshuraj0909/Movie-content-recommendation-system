@@ -10,15 +10,16 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends bash \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml README.md requirements.txt requirements-ui.txt ./
+COPY pyproject.toml README.md requirements.txt requirements.in requirements.lock requirements-ui.txt requirements-ui.lock ./
 COPY src ./src
 COPY backend ./backend
 COPY frontend ./frontend
 COPY scripts/container-entrypoint.sh ./scripts/container-entrypoint.sh
 COPY scripts/setup_demo.sh ./scripts/setup_demo.sh
+COPY scripts/prepare_demo.py ./scripts/prepare_demo.py
 
 RUN python -m pip install --upgrade pip \
-    && python -m pip install -r requirements.txt -r requirements-ui.txt \
+    && python -m pip install --require-hashes -r requirements.lock -r requirements-ui.lock \
     && python -m pip install --no-deps . \
     && chmod +x scripts/container-entrypoint.sh scripts/setup_demo.sh
 

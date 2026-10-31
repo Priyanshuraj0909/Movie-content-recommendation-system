@@ -1,5 +1,5 @@
 # Project Progress
-Current phase: Phase 9 — IN PROGRESS
+Current phase: Release verification — Phase 9 hosted gate pending; Phases 10–13 locally verified
 
 | Phase | Status | Evidence |
 |---|---|---|
@@ -12,6 +12,53 @@ Current phase: Phase 9 — IN PROGRESS
 | 7 UI | Complete | Python 3.12 ARM64; `python -m pytest -q` (33 passed); `python -m ruff check .` (passed); live Streamlit walkthrough covered search, rating, cold-start, similar films and offline states. |
 | 8 Deployment | Complete | Python 3.12 ARM64; `python -m pytest -q` (34 passed); `python -m ruff check .` (passed); 34 tests also passed in a fresh-clone simulation with datasets and artifacts excluded. |
 | 9 Vercel deployment | Deployed; rating POST verification pending | Commit `782eaa5` is live on Vercel production. Production page, `/api/health` (9,742 movies), and `/api/movies/external-ratings?movie_ids=1` returned HTTP 200. Local API integration tests cover rating create/update; the available hosted fetch tool supports GET only, so a production rating write was not exercised. |
+
+## Upgrade verification — 2026-10-31
+
+The owner authorized all upgrade phases, dependencies, GitHub updates and deployment
+in advance. Independent local work continued while the protected production gate
+remained open. No production rating was written and no production access setting
+was changed during local verification.
+
+| Phase | Status | Evidence |
+|---|---|---|
+| 10 Visitor profiles and personalization | Locally verified | Server-issued hashed bearer credentials, visitor factor estimation, benchmark identity isolation, negative content signals, explanations and persistent watchlists; ownership and application-restart tests pass. |
+| 11 Evaluation | Verified locally | Filtered 1,419 of 3,683 tags by author training cutoff; reran known-user evaluation and a 122-user unseen-visitor experiment with bootstrap intervals. Results and limitations are in the model card. |
+| 12 Semantic discovery | Verified locally | 5,952 exact title/year CMU plot matches, 12 ambiguous matches rejected; pinned quantized Sentence Transformers model executed on ARM64; real browser story query returned The Matrix first. Source/license attribution and structured filters are implemented. |
+| 13 Reproducibility and experiments | Verified locally | Hashed runtime/UI/dev/research locks; locked Python 3.12 environment checks; additive Alembic preservation tests; BPR experiment executed and three reports logged to local MLflow. |
+| Final production release | Pending hosted verification | Existing GitHub integration deploys main to king-09/cinematch. The local Vercel CLI is logged out, no automation bypass credential is configured, and the live API redirects to Vercel Authentication. GitHub build/deployment status and runtime checks are separate gates. |
+
+### Executed verification
+
+- `.venv/bin/python -m pytest -q`: 72 passed.
+- `.venv/bin/python -m ruff check .`: passed.
+- `python -m pytest browser_tests -q`: four Chromium journeys passed, covering
+  ratings, recommendation exclusion, watchlists, mobile navigation, story filters,
+  plot attribution and private-profile restoration in a fresh browser context.
+- A separately installed hashed-lock environment passed the checks. The final
+  fresh-copy simulation without generated data or model artifacts passed all
+  72 tests and Ruff. The same locked environment passed all four browser journeys.
+- `python scripts/verify_encoder.py`: real ONNX shape, finite-value, normalization
+  and semantic-pair checks passed. `python scripts/verify_semantic.py`: two real
+  catalog smoke cases passed; this is not a retrieval-quality benchmark.
+- Real local app verification passed health, search, similar films, private-profile
+  rating create/update, saved-item exclusion and rating-history readback. A browser
+  walkthrough against real artifacts reported no JavaScript errors.
+- JavaScript syntax, Vercel JSON parsing, shell syntax and `git diff --check` passed.
+- Docker was unavailable; no container build or hosted PostgreSQL restart test
+  has been claimed. No external provider credentials were invented or configured.
+
+### Corrected findings
+
+The corrected known-user hybrid test NDCG@10 is 0.0323 versus collaborative
+0.0326 and popularity 0.0317. The old 0.0381 hybrid result used all tags and is
+superseded. The unseen-visitor heuristic improves coverage but trails popularity
+on accuracy; it is not advertised as a quality improvement. BPR recorded test
+NDCG@10 0.0472 but remains an optional research baseline. See `docs/MODEL_CARD.md`.
+
+The complete semantic setup and research artifacts remain ignored. pgvector is
+deferred because exact NumPy retrieval is sufficient for the present index;
+no paid database, new vector service or external credential was created.
 
 ## Decisions
 - Python 3.11/3.12 ARM64 environment preferred.

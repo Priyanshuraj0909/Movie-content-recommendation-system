@@ -18,3 +18,9 @@ mlruns/
 *.pkl
 *.db
 *.egg-info/
+
+*.onnx
+*.npy
+mlartifacts/
+playwright-report/
+test-results/

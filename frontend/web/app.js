@@ -3,29 +3,52 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 const PALETTE = ["#6c51aa", "#8b4c75", "#375f77", "#83603e", "#514b8b", "#397061", "#8c4850", "#526483"];
 const WATCHLIST_KEY = "cinematch.watchlist";
-const PROFILE_KEY = "cinematch.profileId";
-let profileId = readProfileId();
+const SESSION_KEY = "cinematch.privateProfile";
+let privateProfile = null;
+try { privateProfile = JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch { /* Create a profile below. */ }
+let profileId = privateProfile?.user_id || null;
 let currentSearchResults = [];
 let activeGenre = "";
 let searchTimer;
+let searchSequence = 0;
 let toastTimer;
 let activeMovie = null;
+let ratingCount = 0;
 const externalRatings = new Map();
 
-function readProfileId() {
-  const stored = Number.parseInt(localStorage.getItem(PROFILE_KEY), 10);
-  if (Number.isSafeInteger(stored) && stored > 0) return stored;
-  const entropy = new Uint32Array(1);
-  crypto.getRandomValues(entropy);
-  const generated = 100000000 + (entropy[0] % 1800000000);
-  localStorage.setItem(PROFILE_KEY, String(generated));
-  return generated;
+async function initializeProfile() {
+  if (!privateProfile?.token || !Number.isSafeInteger(privateProfile.user_id)) {
+    privateProfile = await request("/profiles", { method: "POST" });
+    profileId = privateProfile.user_id;
+    localStorage.setItem(SESSION_KEY, JSON.stringify(privateProfile));
+  }
+  const history = await request("/profiles/" + profileId + "/ratings");
+  ratingCount = history.length;
+  updateOnboarding();
+  const remote = await request("/profiles/" + profileId + "/watchlist");
+  // Preserve and import an existing browser watchlist; never claim old ratings.
+  for (const movie of getWatchlist().slice(0, 500)) {
+    if (!remote.some((entry) => entry.movie_id === movie.movie_id)) {
+      await request("/profiles/" + profileId + "/watchlist", {
+        method: "PUT", body: JSON.stringify({ movie_id: movie.movie_id }),
+      });
+      remote.push(movie);
+    }
+  }
+  saveWatchlist(remote);
+  $("#profile-label").textContent = "Private";
+}
+
+function updateOnboarding() {
+  $("#taste-progress").textContent = ratingCount >= 5
+    ? "Your taste profile is taking shape. Keep rating to refine your picks."
+    : "Start with 5 films you know · " + ratingCount + " rated";
 }
 
 async function request(path, options = {}) {
   const response = await fetch(API + path, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options,
+    headers: { "Content-Type": "application/json", ...(privateProfile?.token ? { "X-Profile-Token": privateProfile.token } : {}), ...(options.headers || {}) },
   });
   if (!response.ok) {
     let message = "The cinema service returned " + response.status + ".";
@@ -103,14 +126,20 @@ function isSaved(movieId) {
   return getWatchlist().some((movie) => Number(movie.movie_id) === Number(movieId));
 }
 
-function toggleWatchlist(movie) {
+async function toggleWatchlist(movie) {
+  try {
+  await profileReady;
   const list = getWatchlist();
   const existing = list.findIndex((item) => Number(item.movie_id) === Number(movie.movie_id));
   if (existing >= 0) {
+    await request("/profiles/" + profileId + "/watchlist/" + movie.movie_id, { method: "DELETE" });
     list.splice(existing, 1);
     saveWatchlist(list);
     showToast("Removed from your watchlist.");
   } else {
+    await request("/profiles/" + profileId + "/watchlist", {
+      method: "PUT", body: JSON.stringify({ movie_id: movie.movie_id }),
+    });
     list.unshift({
       movie_id: Number(movie.movie_id),
       title: String(movie.title),
@@ -123,6 +152,7 @@ function toggleWatchlist(movie) {
   }
   renderWatchlist();
   if (activeMovie && Number(activeMovie.movie_id) === Number(movie.movie_id)) updateDialogWatchlistButton();
+  } catch (error) { showToast(error.message, true); }
 }
 
 function makePoster(movie) {
@@ -184,10 +214,14 @@ function makeRatingControls(movie) {
     button.disabled = true;
     button.textContent = "…";
     try {
+      await profileReady;
       await request("/ratings", {
         method: "POST",
         body: JSON.stringify({ user_id: profileId, movie_id: Number(movie.movie_id), rating }),
       });
+      const history = await request("/profiles/" + profileId + "/ratings");
+      ratingCount = history.length;
+      updateOnboarding();
       showToast("Rating saved. Your next picks will learn from it.");
       if ($("#page-recommendations").classList.contains("active")) loadRecommendations();
       if ($("#page-home").classList.contains("active")) loadHomePicks();
@@ -217,9 +251,9 @@ function makeMovieCard(movie) {
   save.setAttribute("aria-label", (isSaved(movie.movie_id) ? "Remove " : "Add ") + movie.title + " " + (isSaved(movie.movie_id) ? "from" : "to") + " watchlist");
   save.title = isSaved(movie.movie_id) ? "Remove from watchlist" : "Add to watchlist";
   save.textContent = isSaved(movie.movie_id) ? "✓" : "＋";
-  save.addEventListener("click", (event) => {
+  save.addEventListener("click", async (event) => {
     event.stopPropagation();
-    toggleWatchlist(movie);
+    await toggleWatchlist(movie);
     const saved = isSaved(movie.movie_id);
     save.classList.toggle("saved", saved);
     save.textContent = saved ? "✓" : "＋";
@@ -244,7 +278,7 @@ function makeMovieCard(movie) {
   if (Number.isFinite(movie.score)) {
     const score = document.createElement("span");
     score.className = "movie-score";
-    score.textContent = "Match " + Math.round(movie.score * 100) + "%";
+    score.textContent = "Relevance " + Number(movie.score).toFixed(2);
     bottom.append(score);
   }
   const detail = document.createElement("button");
@@ -253,7 +287,11 @@ function makeMovieCard(movie) {
   detail.textContent = "Details";
   detail.addEventListener("click", () => openMovie(movie));
   bottom.append(detail);
-  info.append(title, genres, ratingLine, bottom, makeRatingControls(movie));
+  const explanation = document.createElement("p");
+  explanation.className = "recommendation-reason";
+  explanation.textContent = movie.reason || "";
+  explanation.hidden = !movie.reason;
+  info.append(title, genres, ratingLine, explanation, bottom, makeRatingControls(movie));
   card.append(posterWrap, info);
   return card;
 }
@@ -367,6 +405,7 @@ async function checkHealth() {
 async function loadHomePicks() {
   const container = $("#home-picks");
   try {
+    await profileReady;
     const movies = await request("/recommendations/users/" + profileId + "?limit=12");
     renderMovies(container, movies, "Let’s find your first favorite.", "Rate a film you love to shape recommendations for this profile.");
   } catch (error) {
@@ -377,8 +416,9 @@ async function loadHomePicks() {
 async function loadRecommendations() {
   const container = $("#personal-results");
   container.innerHTML = '<div class="skeleton-grid"><span></span><span></span><span></span><span></span><span></span></div>';
-  $("#profile-label").textContent = String(profileId);
+  $("#profile-label").textContent = "Private";
   try {
+    await profileReady;
     const movies = await request("/recommendations/users/" + profileId + "?limit=30");
     renderMovies(container, movies, "Your next story is one rating away.", "Explore the collection and rate a film you already love.");
   } catch (error) {
@@ -441,13 +481,20 @@ function renderFilteredResults() {
 
 async function searchMovies(query, limit = 30) {
   const params = new URLSearchParams({ q: query, limit: String(limit) });
-  return request("/movies/search?" + params.toString());
+  const story = $("#discovery-mode").value === "story";
+  if (story) {
+    if ($("#max-runtime").value) params.set("max_runtime", $("#max-runtime").value);
+    if ($("#story-language").value.trim()) params.set("language", $("#story-language").value.trim());
+  }
+  return request((story ? "/movies/semantic-search?" : "/movies/search?") + params.toString());
 }
 
 async function runSearch(showSuggestions = true) {
+  const sequence = ++searchSequence;
   const query = $("#movie-search").value.trim();
   const suggestions = $("#search-suggestions");
-  if (query.length < 2) {
+  const story = $("#discovery-mode").value === "story";
+  if (query.length < (story ? 3 : 2)) {
     suggestions.hidden = true;
     if (!query) showEmpty($("#explore-results"), "Every great watch starts somewhere.", "Search a title to discover films from the catalog.");
     return;
@@ -455,7 +502,8 @@ async function runSearch(showSuggestions = true) {
   $("#search-caption").textContent = "Searching the collection…";
   try {
     const movies = await searchMovies(query);
-    if (showSuggestions) {
+    if (sequence !== searchSequence) return;
+    if (showSuggestions && !story) {
       suggestions.replaceChildren();
       movies.slice(0, 7).forEach((movie) => suggestions.append(makeSuggestion(movie)));
       suggestions.hidden = movies.length === 0;
@@ -472,6 +520,10 @@ async function runSearch(showSuggestions = true) {
 
 async function openMovie(movie) {
   activeMovie = movie;
+  $("#plot-section").hidden = true;
+  $("#plot-section").open = false;
+  $("#movie-metadata").textContent = "Loading movie information…";
+  loadMovieDetails(movie);
   const dialog = $("#movie-dialog");
   $("#dialog-title").textContent = movie.title;
   $("#dialog-year").textContent = getYear(movie.title) ? "Released " + getYear(movie.title) : "MovieLens catalog record";
@@ -564,9 +616,14 @@ function showPage(page) {
   if (page === "explore") setTimeout(() => $("#movie-search").focus({ preventScroll: true }), 80);
 }
 
-function openProfileDialog() {
-  $("#profile-id-input").value = String(profileId);
+async function openProfileDialog() {
   $("#profile-dialog").showModal();
+  try {
+    await profileReady;
+    $("#recovery-code").value = profileId + "." + privateProfile.token;
+    const ratings = await request("/profiles/" + profileId + "/ratings");
+    $("#rating-history").textContent = ratings.length + " rated films saved to this profile.";
+  } catch (error) { $("#rating-history").textContent = error.message; }
 }
 
 $$("[data-page-link]").forEach((control) => {
@@ -595,24 +652,39 @@ $("#refresh-picks").addEventListener("click", loadRecommendations);
 $("#watchlist-filter").addEventListener("change", renderWatchlist);
 $("#watchlist-sort").addEventListener("change", renderWatchlist);
 $("#profile-button").addEventListener("click", openProfileDialog);
-$("#profile-form").addEventListener("submit", (event) => {
+$("#profile-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const nextId = Number($("#profile-id-input").value);
-  if (!Number.isSafeInteger(nextId) || nextId <= 0) {
-    showToast("Enter a positive whole-number profile ID.", true);
+  const value = $("#profile-id-input").value.trim();
+  const match = value.match(/^(\d+)\.([A-Za-z0-9_-]{40,64})$/);
+  if (!match || !Number.isSafeInteger(Number(match[1]))) {
+    showToast("Enter the complete private recovery code.", true);
     return;
   }
-  profileId = nextId;
-  localStorage.setItem(PROFILE_KEY, String(profileId));
-  $("#profile-dialog").close();
-  if ($("#page-home").classList.contains("active")) loadHomePicks();
-  if ($("#page-recommendations").classList.contains("active")) loadRecommendations();
-  showToast("Profile updated.");
+  const previous = privateProfile;
+  privateProfile = { user_id: Number(match[1]), token: match[2] };
+  try {
+    await request("/profiles/" + privateProfile.user_id + "/ratings");
+    profileId = privateProfile.user_id;
+    // Keep each profile's watchlist separate when restoring another profile.
+    const list = await request("/profiles/" + profileId + "/watchlist");
+    localStorage.setItem(SESSION_KEY, JSON.stringify(privateProfile));
+    saveWatchlist(list);
+    profileReady = initializeProfile();
+    await profileReady;
+    $("#profile-dialog").close();
+    loadHomePicks();
+    loadRecommendations();
+    showToast("Private profile restored.");
+  } catch (error) {
+    privateProfile = previous;
+    profileId = previous?.user_id || null;
+    showToast(error.message, true);
+  }
 });
 $("[data-close-profile]").addEventListener("click", () => $("#profile-dialog").close());
 $("#movie-dialog .dialog-close").addEventListener("click", () => $("#movie-dialog").close());
-$("#dialog-watchlist").addEventListener("click", () => {
-  if (activeMovie) toggleWatchlist(activeMovie);
+$("#dialog-watchlist").addEventListener("click", async () => {
+  if (activeMovie) await toggleWatchlist(activeMovie);
   updateDialogWatchlistButton();
 });
 $("#dialog-similar").addEventListener("click", () => {
@@ -638,7 +710,61 @@ $("#movie-dialog").addEventListener("click", (event) => {
 
 const nav = $(".primary-nav");
 nav.id = "primary-nav";
-$("#profile-label").textContent = String(profileId);
+$("#profile-label").textContent = "Private";
+const profileReadyInitial = initializeProfile();
+let profileReady = profileReadyInitial;
+profileReady.catch((error) => setConnection("offline", error.message));
 updateWatchlistCount();
 checkHealth();
 loadHomePicks();
+
+$("#show-recovery").addEventListener("click", () => {
+  const input = $("#recovery-code");
+  input.type = input.type === "password" ? "text" : "password";
+});
+$("#profile-dialog").addEventListener("close", () => { $("#recovery-code").type = "password"; });
+
+async function loadMovieDetails(movie) {
+  try {
+    const details = await request("/movies/" + movie.movie_id);
+    if (activeMovie?.movie_id !== movie.movie_id) return;
+    const metadata = [];
+    if (details.runtime_minutes) metadata.push(Math.round(details.runtime_minutes) + " minutes");
+    if (details.languages?.length) metadata.push(details.languages.join(" · "));
+    $("#movie-metadata").textContent = metadata.join(" · ") || "Runtime and language information are unavailable.";
+    $("#plot-section").hidden = !details.summary;
+    $("#movie-plot").textContent = details.summary || "";
+    if (details.source_url) $("#plot-source").href = details.source_url;
+    if (details.license_url) $("#plot-license").href = details.license_url;
+    if (!details.summary) $("#movie-metadata").textContent += " No verified plot summary is available.";
+  } catch {
+    if (activeMovie?.movie_id === movie.movie_id) $("#movie-metadata").textContent = "Movie details are unavailable right now.";
+  }
+}
+
+async function checkCapabilities() {
+  try {
+    const capabilities = await request("/capabilities");
+    $("#discovery-mode option[value=story]").disabled = !capabilities.semantic_search;
+    $("#discovery-status").textContent = capabilities.semantic_search
+      ? "Describe a story or mood to search " + Number(capabilities.semantic_movies).toLocaleString() + " films with verified plot summaries."
+      : "Title search is ready. Story search is not available on this deployment yet.";
+  } catch { $("#discovery-status").textContent = "Title search is available when the catalog is connected."; }
+}
+$("#discovery-mode").addEventListener("change", () => {
+  const story = $("#discovery-mode").value === "story";
+  $("#max-runtime").disabled = !story;
+  $("#story-language").disabled = !story;
+  $("#movie-search").placeholder = story ? "A hopeful story about space exploration…" : "Search by movie title…";
+  $("#movie-search").setAttribute("aria-label", story ? "Describe a story or mood" : "Search movies by title");
+  runSearch(false);
+});
+$("#max-runtime").addEventListener("change", () => runSearch(false));
+$("#story-language").addEventListener("change", () => runSearch(false));
+checkCapabilities();
+
+const tmdbLogo = $(".tmdb-credit img");
+if (tmdbLogo) {
+  tmdbLogo.addEventListener("error", () => { tmdbLogo.hidden = true; });
+  if (tmdbLogo.complete && !tmdbLogo.naturalWidth) tmdbLogo.hidden = true;
+}

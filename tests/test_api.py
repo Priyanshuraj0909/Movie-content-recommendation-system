@@ -13,44 +13,6 @@ from recommender.models.content import ContentRecommender
 from scripts.verify_deployment import verify
 
 
-@pytest.fixture
-def client(tmp_path: Path) -> TestClient:
-    movies = pd.DataFrame(
-        {
-            "movieId": [1, 2, 3, 4, 5],
-            "title": [
-                "Toy Star Voyage (2000)",
-                "Galaxy Journey (2001)",
-                "Space Mystery (2002)",
-                "Ocean Story (2003)",
-                "Deep Sea (2004)",
-            ],
-            "genres": [
-                "Adventure|Sci-Fi",
-                "Adventure|Sci-Fi",
-                "Mystery|Sci-Fi",
-                "Adventure|Drama",
-                "Drama",
-            ],
-            "tags_json": ["[]"] * 5,
-        }
-    )
-    ratings = pd.DataFrame(
-        [
-            {"userId": user_id, "movieId": movie_id, "rating": float(3 + movie_id % 3)}
-            for user_id in (10, 11, 12)
-            for movie_id in (1, 2, 3, 4, 5)
-        ]
-    )
-    app = create_app(
-        content_model=ContentRecommender().fit(movies),
-        collaborative_model=CollaborativeRecommender(epochs=2).fit(ratings),
-        movies=movies,
-        database_url=f"sqlite:///{tmp_path / 'ratings.db'}",
-    )
-    return TestClient(app)
-
-
 def test_health_and_movie_search(client: TestClient) -> None:
     health = client.get("/api/health")
     assert health.status_code == 200
@@ -72,9 +34,9 @@ def test_external_ratings_batch_route_returns_empty_sources_without_credentials(
     assert [item["movie_id"] for item in response.json()] == [1, 2]
     assert response.json()[0]["tmdb"]["rating"] is None
     assert response.json()[0]["imdb"]["rating"] is None
-    assert client.get(
-        "/api/movies/external-ratings", params={"movie_ids": [999]}
-    ).status_code == 404
+    assert (
+        client.get("/api/movies/external-ratings", params={"movie_ids": [999]}).status_code == 404
+    )
 
 
 def test_similar_recommendations_and_unknown_movie(client: TestClient) -> None:
@@ -104,21 +66,15 @@ def test_rating_create_update_and_personalized_recommendations(client: TestClien
     assert updated.status_code == 201
     assert updated.json()["rating"] == 4.0
     with client.app.state.session_factory() as session:
-        saved_ratings = session.scalars(
-            select(UserRating).where(UserRating.user_id == 99)
-        ).all()
+        saved_ratings = session.scalars(select(UserRating).where(UserRating.user_id == 99)).all()
     assert len(saved_ratings) == 1
 
 
 def test_rating_input_validation_and_unknown_movie(client: TestClient) -> None:
-    invalid_scale = client.post(
-        "/api/ratings", json={"user_id": 3, "movie_id": 1, "rating": 3.2}
-    )
+    invalid_scale = client.post("/api/ratings", json={"user_id": 3, "movie_id": 1, "rating": 3.2})
     assert invalid_scale.status_code == 422
 
-    unknown_movie = client.post(
-        "/api/ratings", json={"user_id": 3, "movie_id": 999, "rating": 4.0}
-    )
+    unknown_movie = client.post("/api/ratings", json={"user_id": 3, "movie_id": 999, "rating": 4.0})
     assert unknown_movie.status_code == 404
 
 

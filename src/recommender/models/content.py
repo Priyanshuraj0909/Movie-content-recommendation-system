@@ -172,6 +172,17 @@ class ContentRecommender:
             scores[list(positions)] = np.asarray(self._tfidf[list(indices)] @ profile).ravel()
         return scores
 
+    def score_preferences(
+        self, ratings: dict[int, float], candidate_movie_ids: Iterable[int]
+    ) -> np.ndarray:
+        """Combine liked and disliked content; neutral ratings only exclude seen items."""
+        candidates = list(candidate_movie_ids)
+        liked = [mid for mid, rating in ratings.items() if rating >= 4]
+        disliked = [mid for mid, rating in ratings.items() if rating <= 2.5]
+        return self.score_profile(liked, candidates) - 0.5 * self.score_profile(
+            disliked, candidates
+        )
+
     def similar_movies(
         self,
         movie_id: int,
