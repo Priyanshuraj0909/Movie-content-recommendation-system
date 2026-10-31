@@ -99,6 +99,8 @@ Open `http://127.0.0.1:8000`. Use one server at a time on that port. Alternative
 If opening the app shows “Connection interrupted”, use **Try again** on the picks
 panel. API requests time out after 15 seconds instead of leaving loading cards
 on screen indefinitely. Retrying keeps your private profile and saved feedback.
+Optional web fonts load without blocking startup; the app uses system fonts
+while the font provider is slow or unavailable.
 If the message mentions deployment sign-in, the Vercel owner needs to check
 deployment access; an API request must return JSON rather than a login page.
 

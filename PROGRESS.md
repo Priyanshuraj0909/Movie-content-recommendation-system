@@ -107,6 +107,28 @@ no paid database, new vector service or external credential was created.
   access setting, real visitor rating, or external provider credential was changed.
   Hosted verification remains pending while Vercel Authentication blocks access.
 
+## Phase 9 live loading follow-up — 2026-10-31
+
+- Reproduced the screenshot's exact failure with a stalled Google Fonts
+  stylesheet: deferred application JavaScript never starts, leaving the initial
+  “Connecting” label and skeleton cards untouched. The new regression test failed
+  against the old HTML and passed after the fix.
+- Made the optional font stylesheet nonblocking. Existing system-font fallbacks
+  render the app while fonts load; no dependency or architecture changed.
+- Verification: `.venv/bin/python -m pytest -q` **83 passed**; Ruff, JavaScript
+  syntax, Vercel JSON parsing and `git diff --check` passed. All **14 browser
+  journeys passed** with installed Chrome, including startup with a deliberately
+  stalled font provider and the preceding timeout/retry regressions.
+- Inspected Vercel through the existing authorized CLI session. The preceding
+  `b1737c0` production build took 6m 28s and is now Ready on the flame and king-09
+  aliases. Before it completed, the live alias still served `9654b7a` JavaScript.
+  Confirmed the timeout fix is now present in the live `/app.js`.
+- A live isolated Chrome visit loaded all 12 home cards, private profile reads,
+  recommendations and health without a JavaScript error. The optional remote
+  TMDB logo failed separately and did not prevent movie loading.
+- Follow-up font deployment and final hosted verification are recorded separately
+  after completion; build success alone is not a hosted persistence claim.
+
 ## Decisions
 - Python 3.11/3.12 ARM64 environment preferred.
 - MovieLens latest-small for initial MVP.
