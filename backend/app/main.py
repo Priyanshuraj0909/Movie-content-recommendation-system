@@ -30,6 +30,7 @@ from backend.app.schemas import (
     WatchlistChange,
 )
 from backend.app.services.external_ratings import get_movie_ratings
+from recommender import __version__
 from recommender.config import ARTIFACTS_DIR, PROCESSED_DATA_DIR
 from recommender.models.collaborative import CollaborativeRecommender
 from recommender.models.content import ContentRecommender
@@ -126,7 +127,7 @@ def create_app(
 
     app = FastAPI(
         title="Movie Recommendation API",
-        version="0.2.0",
+        version=__version__,
         lifespan=lifespan,
         docs_url="/api/docs",
         openapi_url="/api/openapi.json",
